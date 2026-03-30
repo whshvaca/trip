@@ -213,7 +213,10 @@ select option{background:var(--card2)}
 .gps-loading .gps-name{color:var(--glow)}
 .gps-error .gps-name{color:var(--red)}
 .rate-preview{font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--peso);margin-top:6px;min-height:16px}
-.submit-btn{width:100%;padding:14px;margin-top:16px;border:none;background:linear-gradient(135deg,var(--glow),var(--glow2));color:var(--night);border-radius:14px;font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;cursor:pointer;letter-spacing:0.05em;transition:all 0.15s}
+.modal-btns{display:flex;gap:10px;margin-top:16px}
+.cancel-btn{flex:0 0 80px;padding:14px;border:1px solid var(--border);background:var(--card2);color:var(--muted);border-radius:14px;font-family:'Noto Sans TC',sans-serif;font-size:0.9rem;cursor:pointer;transition:all 0.15s}
+.cancel-btn:active{background:rgba(255,82,82,0.1);color:var(--red);border-color:rgba(255,82,82,0.3)}
+.submit-btn{flex:1;padding:14px;border:none;background:linear-gradient(135deg,var(--glow),var(--glow2));color:var(--night);border-radius:14px;font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;cursor:pointer;letter-spacing:0.05em;transition:all 0.15s}
 .submit-btn:active{transform:scale(0.97)}
 .toast{position:fixed;bottom:calc(var(--safe-bottom) + 72px);left:50%;transform:translateX(-50%) translateY(16px);background:var(--card);color:var(--text);padding:10px 20px;border-radius:100px;font-size:0.78rem;border:1px solid var(--border);opacity:0;transition:all 0.3s;z-index:200;pointer-events:none;white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -363,7 +366,10 @@ select option{background:var(--card2)}
       </div>
       <div class="gps-spinner" id="gpsSpinner"></div>
     </div>
-    <button class="submit-btn" onclick="submitModal()">記下來 ✓</button>
+    <div class="modal-btns">
+      <button class="cancel-btn" onclick="closeModal()">取消</button>
+      <button class="submit-btn" onclick="submitModal()">記下來 ✓</button>
+    </div>
   </div>
 </div>
 
@@ -554,9 +560,10 @@ function startGPS() {
       const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=zh-TW`,{headers:{'User-Agent':'TravelBudget/4.0'}});
       const data = await r.json();
       currentGPS.name = shortName(data);
-      setGPSUI('ok', currentGPS.name, `精度 ±${currentGPS.accuracy}m`, false);
+      const coord = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+      setGPSUI('ok', currentGPS.name, `📌 ${coord}　±${currentGPS.accuracy}m`, false);
     } catch {
-      currentGPS.name = `${lat.toFixed(5)},${lng.toFixed(5)}`;
+      currentGPS.name = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
       setGPSUI('ok', currentGPS.name, `精度 ±${currentGPS.accuracy}m`, false);
     }
   }, err => {
@@ -673,7 +680,8 @@ window.openModal = function(type='expense') {
   document.getElementById('overlay').classList.add('show');
 };
 window.closeOverlay = function(e) { if(e.target===document.getElementById('overlay')) document.getElementById('overlay').classList.remove('show'); };
-function closeModal() { document.getElementById('overlay').classList.remove('show'); }
+window.closeModal = function() { document.getElementById('overlay').classList.remove('show'); };
+function closeModal() { window.closeModal(); }
 
 window.setModalType = function(t) {
   modalType=t;
@@ -776,7 +784,17 @@ function whoBadge(who) {
 }
 
 function gpsRow(gps) {
-  if(gps?.name) return `<div class="entry-loc"><div class="loc-dot has-gps"></div><span class="loc-name">${gps.name}</span></div>`;
+  if(gps?.lat) {
+    const coordStr = `${gps.lat.toFixed(5)}, ${gps.lng.toFixed(5)}`;
+    const name = gps.name || coordStr;
+    return `<div class="entry-loc">
+      <div class="loc-dot has-gps"></div>
+      <div style="min-width:0">
+        <div class="loc-name">${name}</div>
+        <div style="font-size:0.62rem;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-top:1px">${coordStr}</div>
+      </div>
+    </div>`;
+  }
   return `<div class="entry-loc"><div class="loc-dot no-gps"></div><span class="loc-none">未取得位置</span></div>`;
 }
 
