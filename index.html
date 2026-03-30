@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="旅費本">
+<title>旅費本</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --night: #0d1117;
+  --deep: #141c2b;
+  --card: #1a2540;
+  --card2: #1f2d4a;
+  --border: rgba(255,255,255,0.08);
+  --glow: #f7a541;
+  --glow2: #ff6b35;
+  --peso: #4ecdc4;
+  --usd: #f7a541;
+  --green: #56cf89;
+  --red: #ff5252;
+  --text: #e8eaf0;
+  --muted: #6b7a9a;
+  --safe-top: env(safe-area-inset-top);
+  --safe-bottom: env(safe-area-inset-bottom);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden}
+body{font-family:'Noto Sans TC',sans-serif;background:var(--night);color:var(--text);height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── Header ── */
+.header{background:linear-gradient(135deg,var(--deep) 0%,var(--card) 100%);padding:calc(var(--safe-top) + 12px) 18px 12px;border-bottom:1px solid var(--border);flex-shrink:0;position:relative;overflow:hidden}
+.header::after{content:'';position:absolute;top:-20px;right:-20px;width:140px;height:140px;border-radius:50%;background:radial-gradient(circle,rgba(247,165,65,0.12) 0%,transparent 70%);pointer-events:none}
+.header-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.app-name{font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800;letter-spacing:0.05em;color:var(--glow)}
+.app-sub{font-size:0.6rem;color:var(--muted);letter-spacing:0.15em;margin-top:2px}
+.hdr-btn{background:rgba(255,255,255,0.06);border:1px solid var(--border);color:var(--text);width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1rem;transition:background 0.15s}
+.hdr-btn:active{background:rgba(247,165,65,0.2)}
+
+/* Day pill */
+.day-pill{display:inline-flex;align-items:center;gap:6px;background:rgba(247,165,65,0.1);border:1px solid rgba(247,165,65,0.25);border-radius:20px;padding:3px 10px;font-size:0.7rem;color:var(--glow);margin-bottom:10px}
+.day-dot{width:5px;height:5px;border-radius:50%;background:var(--glow);animation:gpsPulse 2s infinite}
+@keyframes gpsPulse{0%,100%{opacity:1}50%{opacity:0.3}}
+
+.budget-row{display:flex;gap:10px}
+.budget-card{flex:1;background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:10px 12px;position:relative;overflow:hidden}
+.budget-card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,0.03) 0%,transparent 60%)}
+.bc-label{font-size:0.6rem;color:var(--muted);letter-spacing:0.2em;margin-bottom:4px}
+.bc-amount{font-family:'JetBrains Mono',monospace;font-size:1.1rem;font-weight:700}
+.bc-sub{font-size:0.62rem;color:var(--muted);margin-top:2px}
+.bc-dot{width:6px;height:6px;border-radius:50%;position:absolute;top:10px;right:10px}
+.usd-card .bc-amount{color:var(--usd)}
+.usd-card .bc-dot{background:var(--usd);box-shadow:0 0 8px var(--usd)}
+.peso-card .bc-amount{color:var(--peso)}
+.peso-card .bc-dot{background:var(--peso);box-shadow:0 0 8px var(--peso)}
+.budget-bar{height:3px;background:rgba(255,255,255,0.08);border-radius:2px;margin-top:8px;overflow:hidden}
+.budget-fill{height:100%;border-radius:2px;transition:width 0.5s cubic-bezier(0.34,1.56,0.64,1)}
+
+/* ── Tabs ── */
+.tabs{background:var(--deep);display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+.tab{flex:1;padding:10px 0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:0.62rem;color:var(--muted);letter-spacing:0.1em;border-bottom:2px solid transparent;transition:all 0.2s}
+.tab.active{color:var(--glow);border-bottom-color:var(--glow)}
+.tab-ico{font-size:1rem}
+
+/* ── Screens ── */
+.screen{flex:1;overflow:hidden;display:none;flex-direction:column}
+.screen.active{display:flex}
+
+/* ── Chat ── */
+.chat-msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;-webkit-overflow-scrolling:touch}
+.msg{display:flex;align-items:flex-end;gap:8px;animation:msgIn 0.25s ease}
+@keyframes msgIn{from{opacity:0;transform:translateY(8px)}}
+.msg.user{flex-direction:row-reverse}
+.avatar{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.7rem;flex-shrink:0;font-weight:700}
+.msg.ai .avatar{background:linear-gradient(135deg,var(--glow),var(--glow2));color:var(--night)}
+.msg.user .avatar{background:var(--card2);color:var(--peso);border:1px solid var(--border)}
+.bubble{max-width:82%;padding:10px 14px;border-radius:18px;font-size:0.875rem;line-height:1.6}
+.msg.ai .bubble{background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:4px 18px 18px 18px}
+.msg.user .bubble{background:linear-gradient(135deg,#1e3a5f,#1a2f4e);color:var(--text);border:1px solid rgba(78,205,196,0.2);border-radius:18px 18px 4px 18px}
+.typing{display:flex;gap:4px;padding:6px 10px}
+.typing span{width:5px;height:5px;background:var(--muted);border-radius:50%;animation:dot 1.2s infinite}
+.typing span:nth-child(2){animation-delay:0.2s}
+.typing span:nth-child(3){animation-delay:0.4s}
+@keyframes dot{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
+
+.quick-row{display:flex;gap:7px;padding:8px 14px;overflow-x:auto;scrollbar-width:none;border-top:1px solid var(--border);flex-shrink:0}
+.quick-row::-webkit-scrollbar{display:none}
+.qchip{padding:7px 13px;border-radius:20px;white-space:nowrap;background:var(--card2);border:1px solid var(--border);font-size:0.72rem;cursor:pointer;flex-shrink:0;transition:all 0.15s;color:var(--text)}
+.qchip:active{background:rgba(247,165,65,0.15);border-color:var(--glow);color:var(--glow)}
+
+.input-bar{background:var(--deep);border-top:1px solid var(--border);padding:10px 12px calc(var(--safe-bottom) + 10px);display:flex;gap:8px;align-items:flex-end;flex-shrink:0}
+#chatInput{flex:1;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:10px 16px;font-family:'Noto Sans TC',sans-serif;font-size:0.9rem;color:var(--text);resize:none;max-height:100px;outline:none;line-height:1.4;-webkit-appearance:none}
+#chatInput::placeholder{color:var(--muted)}
+#chatInput:focus{border-color:rgba(247,165,65,0.5)}
+.send-btn{width:40px;height:40px;border-radius:50%;border:none;background:linear-gradient(135deg,var(--glow),var(--glow2));color:var(--night);cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:700;transition:all 0.15s}
+.send-btn:active{transform:scale(0.92)}
+
+/* ── Ledger ── */
+.ledger-top{padding:14px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--deep)}
+.filter-row{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none}
+.filter-row::-webkit-scrollbar{display:none}
+.fchip{padding:6px 14px;border-radius:20px;white-space:nowrap;background:var(--card2);border:1px solid var(--border);font-size:0.72rem;cursor:pointer;transition:all 0.15s;color:var(--muted)}
+.fchip.active{background:rgba(247,165,65,0.12);border-color:var(--glow);color:var(--glow)}
+
+.entries-list{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.day-hdr{padding:8px 16px;font-size:0.68rem;color:var(--muted);letter-spacing:0.1em;background:var(--night);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center}
+.day-hdr-label{display:flex;align-items:center;gap:8px}
+.day-num-badge{background:rgba(247,165,65,0.15);color:var(--glow);border-radius:6px;padding:1px 7px;font-size:0.65rem;font-weight:700;font-family:'Syne',sans-serif}
+.entry-row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--deep);transition:background 0.1s}
+.entry-row:active{background:var(--card)}
+.entry-row.exchange{border-left:3px solid var(--peso)}
+.entry-row.expense{border-left:3px solid rgba(255,82,82,0.4)}
+.entry-emoji{font-size:1.2rem;width:32px;text-align:center;flex-shrink:0}
+.entry-info{flex:1;min-width:0}
+.entry-desc{font-size:0.875rem;font-weight:500}
+.entry-meta{font-size:0.68rem;color:var(--muted);margin-top:3px;display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.entry-loc{display:flex;align-items:center;gap:5px;margin-top:5px;font-size:0.7rem;width:100%}
+.loc-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.loc-dot.has-gps{background:var(--green);box-shadow:0 0 5px var(--green)}
+.loc-dot.no-gps{background:var(--muted);opacity:0.5}
+.loc-name{color:rgba(78,205,196,0.9);font-size:0.7rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:calc(100% - 40px)}
+.loc-none{color:var(--muted);font-size:0.68rem;opacity:0.6}
+.loc-tag{color:rgba(78,205,196,0.8);font-size:0.65rem;display:flex;align-items:center;gap:2px}
+.entry-right{text-align:right;flex-shrink:0}
+.entry-amt{font-family:'JetBrains Mono',monospace;font-size:0.95rem;font-weight:700}
+.entry-cur{font-size:0.6rem;color:var(--muted);margin-top:1px}
+.del-btn{background:none;border:none;color:var(--muted);font-size:0.85rem;cursor:pointer;padding:6px;opacity:0.4;flex-shrink:0}
+.del-btn:active{color:var(--red);opacity:1}
+.empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);gap:10px;padding:40px;text-align:center}
+.empty-ico{font-size:3rem;opacity:0.25}
+
+/* ── Export ── */
+.export-wrap{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:14px;-webkit-overflow-scrolling:touch}
+.exp-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px}
+.exp-card h3{font-size:0.68rem;color:var(--muted);letter-spacing:0.2em;margin-bottom:12px;text-transform:uppercase}
+.fmt-row{display:flex;gap:7px;flex-wrap:wrap}
+.fmt-btn{flex:1;min-width:85px;padding:10px;border-radius:10px;background:var(--card2);border:1px solid var(--border);font-size:0.75rem;cursor:pointer;transition:all 0.15s;color:var(--muted);text-align:center;font-family:'Noto Sans TC',sans-serif;line-height:1.4}
+.fmt-btn.active{background:rgba(247,165,65,0.12);border-color:var(--glow);color:var(--glow)}
+.preview-box{background:var(--night);border:1px solid var(--border);border-radius:10px;padding:12px;font-family:'JetBrains Mono',monospace;font-size:0.7rem;line-height:1.75;white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto;color:var(--text);-webkit-overflow-scrolling:touch}
+.exp-btns{display:flex;gap:8px}
+.exp-action-btn{flex:1;padding:13px;border:none;border-radius:12px;font-family:'Syne',sans-serif;font-size:0.85rem;font-weight:700;cursor:pointer;letter-spacing:0.05em;transition:all 0.15s}
+.exp-action-btn.primary{background:linear-gradient(135deg,var(--glow),var(--glow2));color:var(--night)}
+.exp-action-btn.secondary{background:var(--card2);color:var(--text);border:1px solid var(--border)}
+.exp-action-btn:active{transform:scale(0.97)}
+
+/* ── Modal ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:50;display:flex;align-items:flex-end;opacity:0;pointer-events:none;transition:opacity 0.2s}
+.overlay.show{opacity:1;pointer-events:all}
+.modal{background:var(--card);width:100%;border-radius:22px 22px 0 0;padding:18px 18px calc(var(--safe-bottom) + 18px);transform:translateY(100%);transition:transform 0.35s cubic-bezier(0.34,1.2,0.64,1);max-height:92vh;overflow-y:auto}
+.overlay.show .modal{transform:translateY(0)}
+.modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px}
+.modal-title{font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;margin-bottom:14px}
+
+.type-toggle{display:flex;gap:0;border-radius:12px;overflow:hidden;border:1px solid var(--border);margin-bottom:14px}
+.type-btn{flex:1;padding:11px;text-align:center;cursor:pointer;font-size:0.82rem;background:var(--card2);color:var(--muted);transition:all 0.15s}
+.type-btn.active.expense{background:rgba(255,82,82,0.12);color:var(--red)}
+.type-btn.active.exchange{background:rgba(78,205,196,0.12);color:var(--peso)}
+
+.field-label{font-size:0.67rem;color:var(--muted);letter-spacing:0.15em;margin-bottom:6px;display:block;margin-top:13px}
+input[type=text],input[type=number],select{width:100%;padding:11px 14px;background:var(--card2);border:1px solid var(--border);border-radius:10px;font-family:'Noto Sans TC',sans-serif;font-size:0.9rem;color:var(--text);outline:none;-webkit-appearance:none;appearance:none}
+input:focus,select:focus{border-color:rgba(247,165,65,0.5)}
+select option{background:var(--card2)}
+
+.cur-toggle{display:flex;gap:8px}
+.cur-btn{flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);text-align:center;cursor:pointer;font-size:0.82rem;background:var(--card2);color:var(--muted);transition:all 0.15s}
+.cur-btn.active.usd{background:rgba(247,165,65,0.15);color:var(--usd);border-color:rgba(247,165,65,0.4)}
+.cur-btn.active.peso{background:rgba(78,205,196,0.15);color:var(--peso);border-color:rgba(78,205,196,0.4)}
+
+.mood-row{display:flex;gap:7px;flex-wrap:wrap;margin-top:6px}
+.mood-btn{padding:7px 12px;border-radius:20px;background:var(--card2);border:1px solid var(--border);font-size:0.8rem;cursor:pointer;transition:all 0.15s}
+.mood-btn.active{background:rgba(247,165,65,0.15);border-color:var(--glow)}
+
+/* GPS status */
+.gps-status-bar{display:flex;align-items:center;gap:10px;background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-top:14px}
+.gps-icon{font-size:1.1rem;flex-shrink:0}
+.gps-text{flex:1}
+.gps-name{font-size:0.8rem;font-weight:500;margin-bottom:1px}
+.gps-sub{font-size:0.68rem;color:var(--muted)}
+.gps-spinner{width:16px;height:16px;border:2px solid rgba(247,165,65,0.2);border-top-color:var(--glow);border-radius:50%;animation:spin 0.8s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.gps-ok .gps-name{color:var(--green)}
+.gps-loading .gps-name{color:var(--glow)}
+.gps-error .gps-name{color:var(--red)}
+
+.rate-preview{font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--peso);margin-top:6px;min-height:16px}
+
+.submit-btn{width:100%;padding:14px;margin-top:16px;border:none;background:linear-gradient(135deg,var(--glow),var(--glow2));color:var(--night);border-radius:14px;font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;cursor:pointer;letter-spacing:0.05em;transition:all 0.15s}
+.submit-btn:active{transform:scale(0.97)}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:calc(var(--safe-bottom) + 72px);left:50%;transform:translateX(-50%) translateY(16px);background:var(--card);color:var(--text);padding:10px 20px;border-radius:100px;font-size:0.78rem;border:1px solid var(--border);opacity:0;transition:all 0.3s;z-index:200;pointer-events:none;white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-top">
+    <div>
+      <div class="app-name">✈ 旅費本</div>
+      <div class="app-sub">3/31 – 4/7 · 菲律賓</div>
+    </div>
+    <div class="hdr-btn" onclick="openModal('expense')">＋</div>
+  </div>
+  <div id="dayPill" class="day-pill"><div class="day-dot"></div><span id="dayPillText">計算中…</span></div>
+  <div class="budget-row">
+    <div class="budget-card usd-card">
+      <div class="bc-dot"></div>
+      <div class="bc-label">USD 餘額</div>
+      <div class="bc-amount" id="usdBalance">$1,997.00</div>
+      <div class="bc-sub" id="usdSpent">已花 $0.00</div>
+      <div class="budget-bar"><div class="budget-fill" id="usdBar" style="width:100%"></div></div>
+    </div>
+    <div class="budget-card peso-card">
+      <div class="bc-dot"></div>
+      <div class="bc-label">PHP 餘額</div>
+      <div class="bc-amount" id="pesoBalance">₱0</div>
+      <div class="bc-sub" id="pesoInfo">尚未換匯</div>
+    </div>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('chat')"><div class="tab-ico">💬</div>對話</div>
+  <div class="tab" onclick="switchTab('ledger')"><div class="tab-ico">📋</div>帳目</div>
+  <div class="tab" onclick="switchTab('export')"><div class="tab-ico">📤</div>匯出</div>
+</div>
+
+<!-- Chat -->
+<div class="screen active" id="screen-chat">
+  <div class="chat-msgs" id="chatMsgs"></div>
+  <div class="quick-row">
+    <div class="qchip" onclick="quickSend('查餘額')">💰 餘額</div>
+    <div class="qchip" onclick="quickSend('今天花了多少？')">📊 今日</div>
+    <div class="qchip" onclick="openModal('expense')">💸 記支出</div>
+    <div class="qchip" onclick="openModal('exchange')">💱 換匯</div>
+    <div class="qchip" onclick="quickSend('這趟總共花了多少？')">🧾 總計</div>
+  </div>
+  <div class="input-bar">
+    <textarea id="chatInput" placeholder="說說你花了什麼…" rows="1"
+      oninput="autoResize(this)" onkeydown="handleKey(event)"></textarea>
+    <button class="send-btn" onclick="sendChat()">▶</button>
+  </div>
+</div>
+
+<!-- Ledger -->
+<div class="screen" id="screen-ledger">
+  <div class="ledger-top">
+    <div class="filter-row" id="filterRow"></div>
+  </div>
+  <div class="entries-list" id="entriesList"></div>
+</div>
+
+<!-- Export -->
+<div class="screen" id="screen-export">
+  <div class="export-wrap" id="exportWrap"></div>
+</div>
+
+<!-- Modal -->
+<div class="overlay" id="overlay" onclick="closeOverlay(event)">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="modalTitle">記錄支出</div>
+    <div class="type-toggle">
+      <div class="type-btn expense active" id="tExpense" onclick="setModalType('expense')">💸 支出</div>
+      <div class="type-btn exchange" id="tExchange" onclick="setModalType('exchange')">💱 換匯</div>
+    </div>
+
+    <!-- Expense -->
+    <div id="expenseFields">
+      <span class="field-label">幣別</span>
+      <div class="cur-toggle">
+        <div class="cur-btn usd active" id="curUSD" onclick="setCur('USD')">🇺🇸 美金 USD</div>
+        <div class="cur-btn peso" id="curPHP" onclick="setCur('PHP')">🇵🇭 披索 PHP</div>
+      </div>
+      <span class="field-label">品項</span>
+      <input type="text" id="mDesc" placeholder="例：午餐、計程車、門票…">
+      <span class="field-label">金額</span>
+      <input type="number" id="mAmount" placeholder="0" inputmode="decimal">
+      <span class="field-label">類別</span>
+      <select id="mCat">
+        <option>🍜 餐飲</option>
+        <option>🚗 交通</option>
+        <option>🏨 住宿</option>
+        <option>🎫 景點／活動</option>
+        <option>🛒 購物</option>
+        <option>💊 醫藥</option>
+        <option>📶 通訊</option>
+        <option>✈ 機票</option>
+        <option>🎁 伴手禮</option>
+        <option>🔮 其他</option>
+      </select>
+      <span class="field-label">心情（選填）</span>
+      <div class="mood-row">
+        <div class="mood-btn" onclick="toggleMood(this,'😊')">😊 開心</div>
+        <div class="mood-btn" onclick="toggleMood(this,'😋')">😋 好吃</div>
+        <div class="mood-btn" onclick="toggleMood(this,'😎')">😎 值得</div>
+        <div class="mood-btn" onclick="toggleMood(this,'🤑')">🤑 衝動</div>
+        <div class="mood-btn" onclick="toggleMood(this,'😅')">😅 有點貴</div>
+        <div class="mood-btn" onclick="toggleMood(this,'😢')">😢 後悔</div>
+      </div>
+      <span class="field-label">備註（選填）</span>
+      <input type="text" id="mNote" placeholder="額外說明…">
+    </div>
+
+    <!-- Exchange -->
+    <div id="exchangeFields" style="display:none">
+      <span class="field-label">用了多少美金</span>
+      <input type="number" id="exUSD" placeholder="0.00" inputmode="decimal">
+      <span class="field-label">換到多少披索</span>
+      <input type="number" id="exPHP" placeholder="0" inputmode="decimal">
+      <div class="rate-preview" id="ratePreview">匯率：—</div>
+      <span class="field-label">在哪裡換的</span>
+      <input type="text" id="exWhere" placeholder="例：機場、Unionbank、街頭換匯所…">
+      <span class="field-label">備註（選填）</span>
+      <input type="text" id="exNote" placeholder="">
+    </div>
+
+    <!-- GPS -->
+    <div class="gps-status-bar gps-loading" id="gpsBar">
+      <div class="gps-icon">📍</div>
+      <div class="gps-text" id="gpsText">
+        <div class="gps-name" id="gpsName">定位中…</div>
+        <div class="gps-sub" id="gpsSub">正在取得 GPS 位置</div>
+      </div>
+      <div class="gps-spinner" id="gpsSpinner"></div>
+    </div>
+
+    <button class="submit-btn" onclick="submitModal()">記下來 ✓</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════
+// CONSTANTS
+// ══════════════════════════════════
+const BUDGET_USD  = 1997;
+const TRIP_START  = '2025-03-31';   // Day 1
+const TRIP_END    = '2025-04-07';   // Day 8
+const TRIP_DAYS   = 8;
+
+// ══════════════════════════════════
+// STATE
+// ══════════════════════════════════
+let records     = JSON.parse(localStorage.getItem('trv3_records') || '[]');
+let chatLog     = JSON.parse(localStorage.getItem('trv3_chat')    || '[]');
+let activeFilter = 'all';
+let exportFormat = 'blog';
+let modalType   = 'expense';
+let selectedCur = 'USD';
+let selectedMood = '';
+let currentGPS  = null;
+
+function save()     { localStorage.setItem('trv3_records', JSON.stringify(records)); }
+function saveChat() { if(chatLog.length>80) chatLog=chatLog.slice(-80); localStorage.setItem('trv3_chat',JSON.stringify(chatLog)); }
+
+// ══════════════════════════════════
+// TRIP DAY HELPER
+// ══════════════════════════════════
+function tripDayOf(dateStr) {
+  const start = new Date(TRIP_START + 'T00:00:00');
+  const d     = new Date(dateStr    + 'T00:00:00');
+  const diff  = Math.round((d - start) / 86400000);
+  return diff >= 0 && diff < TRIP_DAYS ? diff + 1 : null;
+}
+function dayLabel(dayNum) {
+  const dates = ['3/31','4/1','4/2','4/3','4/4','4/5','4/6','4/7'];
+  return `Day ${dayNum}・${dates[dayNum-1]}`;
+}
+function todayDayNum() { return tripDayOf(today()) || '—'; }
+function updateDayPill() {
+  const dn = todayDayNum();
+  const el = document.getElementById('dayPillText');
+  if(typeof dn === 'number') el.textContent = `Day ${dn} of ${TRIP_DAYS}・旅程第 ${dn} 天`;
+  else el.textContent = '旅程記帳本';
+}
+
+// ══════════════════════════════════
+// GPS
+// ══════════════════════════════════
+function startGPS() {
+  currentGPS = null;
+  setGPSUI('loading','定位中…','正在取得 GPS 位置',true);
+  if(!navigator.geolocation){ setGPSUI('error','裝置不支援 GPS','此筆記錄不含位置資訊',false); return; }
+  navigator.geolocation.getCurrentPosition(
+    async pos => {
+      const {latitude:lat, longitude:lng, accuracy} = pos.coords;
+      currentGPS = {lat, lng, accuracy: Math.round(accuracy), name: null};
+      setGPSUI('loading','解析地址中…',`精度 ±${Math.round(accuracy)}m`,true);
+      try {
+        const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=zh-TW`,{headers:{'User-Agent':'TravelBudget/3.0'}});
+        const d = await r.json();
+        currentGPS.name = shortName(d);
+        setGPSUI('ok', currentGPS.name, `精度 ±${currentGPS.accuracy}m`, false);
+      } catch {
+        currentGPS.name = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+        setGPSUI('ok', currentGPS.name, `精度 ±${currentGPS.accuracy}m`, false);
+      }
+    },
+    err => {
+      const m={1:'位置權限被拒絕',2:'無法取得位置',3:'定位逾時'};
+      setGPSUI('error', m[err.code]||'定位失敗', err.code===1?'請在 Safari 設定中允許位置':'此筆記錄不含位置資訊', false);
+      currentGPS = null;
+    },
+    {enableHighAccuracy:true, timeout:14000, maximumAge:30000}
+  );
+}
+
+function shortName(d) {
+  const a = d.address || {};
+  const parts = [];
+  if(a.amenity||a.shop||a.tourism||a.leisure) parts.push(a.amenity||a.shop||a.tourism||a.leisure);
+  if(a.road||a.neighbourhood||a.suburb) parts.push(a.road||a.neighbourhood||a.suburb);
+  if(a.city||a.town||a.village||a.municipality) parts.push(a.city||a.town||a.village||a.municipality);
+  return parts.length ? parts.slice(0,2).join('，') : (d.display_name||'').split(',').slice(0,2).join(',').trim();
+}
+
+function setGPSUI(state, name, sub, showSpinner) {
+  const bar = document.getElementById('gpsBar');
+  const nm  = document.getElementById('gpsName');
+  const sb  = document.getElementById('gpsSub');
+  const sp  = document.getElementById('gpsSpinner');
+  if(!bar) return;
+  bar.className = `gps-status-bar gps-${state}`;
+  nm.textContent = name;
+  sb.textContent = sub;
+  sp.style.display = showSpinner ? 'block' : 'none';
+  bar.style.borderColor = state==='ok'?'rgba(86,207,137,0.25)':state==='error'?'rgba(255,82,82,0.2)':'var(--border)';
+}
+
+async function getGPSSilent() {
+  return new Promise(resolve => {
+    if(!navigator.geolocation){ resolve(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      async pos => {
+        const {latitude:lat, longitude:lng, accuracy} = pos.coords;
+        try {
+          const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=zh-TW`,{headers:{'User-Agent':'TravelBudget/3.0'}});
+          const d = await r.json();
+          resolve({lat, lng, accuracy: Math.round(accuracy), name: shortName(d)});
+        } catch { resolve({lat, lng, accuracy: Math.round(accuracy), name: `${lat.toFixed(5)},${lng.toFixed(5)}`}); }
+      },
+      () => resolve(null),
+      {enableHighAccuracy:true, timeout:8000, maximumAge:60000}
+    );
+  });
+}
+
+// ══════════════════════════════════
+// BALANCE
+// ══════════════════════════════════
+function calcBalance() {
+  let usdSpent=0, phpBalance=0;
+  records.filter(r=>r.type==='exchange').forEach(r=>{ usdSpent+=r.usd; phpBalance+=r.php; });
+  records.filter(r=>r.type==='expense').forEach(r=>{
+    if(r.currency==='USD') usdSpent+=r.amount; else phpBalance-=r.amount;
+  });
+  return { usdBalance: BUDGET_USD - usdSpent, usdSpent, phpBalance };
+}
+
+function updateHeader() {
+  updateDayPill();
+  const b = calcBalance();
+  const fmt = v => '$'+Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  document.getElementById('usdBalance').textContent = fmt(b.usdBalance);
+  document.getElementById('usdSpent').textContent   = '已花 '+fmt(b.usdSpent);
+  document.getElementById('pesoBalance').textContent = '₱'+Math.round(b.phpBalance).toLocaleString();
+  const exc = records.filter(r=>r.type==='exchange');
+  document.getElementById('pesoInfo').textContent = exc.length ? `換匯 ${exc.length} 次` : '尚未換匯';
+  const pct = Math.max(0,Math.min(100,(b.usdBalance/BUDGET_USD)*100));
+  const bar = document.getElementById('usdBar');
+  bar.style.width = pct+'%';
+  bar.style.background = pct>50?'linear-gradient(90deg,#56cf89,#4ecdc4)':pct>25?'linear-gradient(90deg,#f7a541,#ff6b35)':'linear-gradient(90deg,#ff5252,#ff6b35)';
+}
+
+// ══════════════════════════════════
+// TABS
+// ══════════════════════════════════
+function switchTab(tab) {
+  document.querySelectorAll('.screen').forEach(s=>{s.classList.remove('active');s.style.display='none'});
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  const s=document.getElementById('screen-'+tab); s.style.display='flex'; s.classList.add('active');
+  ['chat','ledger','export'].forEach((t,i)=>{ if(t===tab) document.querySelectorAll('.tab')[i].classList.add('active'); });
+  if(tab==='ledger') renderLedger();
+  if(tab==='export') renderExport();
+}
+
+// ══════════════════════════════════
+// MODAL
+// ══════════════════════════════════
+function openModal(type='expense') {
+  setModalType(type); currentGPS=null; startGPS();
+  document.getElementById('overlay').classList.add('show');
+}
+function closeOverlay(e){ if(e.target===document.getElementById('overlay')) document.getElementById('overlay').classList.remove('show'); }
+function closeModal(){ document.getElementById('overlay').classList.remove('show'); }
+function setModalType(t){
+  modalType=t;
+  document.getElementById('tExpense').classList.toggle('active',t==='expense');
+  document.getElementById('tExchange').classList.toggle('active',t==='exchange');
+  document.getElementById('expenseFields').style.display  = t==='expense'?'block':'none';
+  document.getElementById('exchangeFields').style.display = t==='exchange'?'block':'none';
+  document.getElementById('modalTitle').textContent = t==='expense'?'記錄支出':'換匯紀錄';
+}
+function setCur(c){
+  selectedCur=c;
+  document.getElementById('curUSD').classList.toggle('active',c==='USD');
+  document.getElementById('curPHP').classList.toggle('active',c==='PHP');
+}
+function toggleMood(el,emoji){
+  const was=el.classList.contains('active');
+  document.querySelectorAll('.mood-btn').forEach(b=>b.classList.remove('active'));
+  if(!was){ el.classList.add('active'); selectedMood=emoji; } else selectedMood='';
+}
+document.addEventListener('input', e=>{
+  if(e.target.id==='exUSD'||e.target.id==='exPHP'){
+    const u=parseFloat(document.getElementById('exUSD').value)||0;
+    const p=parseFloat(document.getElementById('exPHP').value)||0;
+    document.getElementById('ratePreview').textContent=(u>0&&p>0)?`匯率：${(p/u).toFixed(2)} PHP / USD`:'匯率：—';
+  }
+});
+
+function submitModal(){
+  if(modalType==='exchange'){
+    const usd=parseFloat(document.getElementById('exUSD').value);
+    const php=parseFloat(document.getElementById('exPHP').value);
+    const where=document.getElementById('exWhere').value.trim()||'未指定';
+    const note=document.getElementById('exNote').value.trim();
+    if(!usd||!php||usd<=0||php<=0){ showToast('請填寫換匯金額'); return; }
+    addRecord({type:'exchange',usd,php,where,note,date:today(),rate:(php/usd),gps:currentGPS?{...currentGPS}:null});
+    const gpsMsg2 = currentGPS?.name ? `📍 ${currentGPS.name}` : '⚠️ 未取得 GPS';
+    showToast(`✓ 換匯已記錄・${gpsMsg2}`);
+  } else {
+    const amount=parseFloat(document.getElementById('mAmount').value);
+    const desc=document.getElementById('mDesc').value.trim();
+    const cat=document.getElementById('mCat').value.replace(/\p{Emoji_Presentation}/gu,'').trim();
+    const note=document.getElementById('mNote').value.trim();
+    if(!amount||amount<=0||!desc){ showToast('請填寫品項與金額'); return; }
+    addRecord({type:'expense',amount,currency:selectedCur,desc,cat,mood:selectedMood,note,date:today(),gps:currentGPS?{...currentGPS}:null});
+    const gpsMsg = currentGPS?.name ? `📍 ${currentGPS.name}` : '⚠️ 未取得 GPS';
+    showToast(`✓ 已記錄・${gpsMsg}`);
+  }
+  updateHeader(); closeModal(); resetModal();
+}
+
+function resetModal(){
+  ['mDesc','mAmount','mNote','exUSD','exPHP','exWhere','exNote'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  selectedMood=''; document.querySelectorAll('.mood-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('ratePreview').textContent='匯率：—';
+}
+function addRecord(r){ records.unshift({id:Date.now(),...r}); save(); }
+function deleteRecord(id){ records=records.filter(r=>r.id!==id); save(); updateHeader(); renderLedger(); showToast('已刪除'); }
+
+// ══════════════════════════════════
+// LEDGER
+// ══════════════════════════════════
+const FILTERS=[{id:'all',label:'全部'},{id:'expense',label:'💸 支出'},{id:'exchange',label:'💱 換匯'},{id:'USD',label:'🇺🇸 USD'},{id:'PHP',label:'🇵🇭 PHP'}];
+
+function renderLedger(){
+  document.getElementById('filterRow').innerHTML=FILTERS.map(f=>
+    `<div class="fchip ${activeFilter===f.id?'active':''}" onclick="setFilter('${f.id}')">${f.label}</div>`
+  ).join('');
+  let data=records;
+  if(activeFilter==='expense') data=records.filter(r=>r.type==='expense');
+  else if(activeFilter==='exchange') data=records.filter(r=>r.type==='exchange');
+  else if(activeFilter==='USD') data=records.filter(r=>r.currency==='USD'||r.type==='exchange');
+  else if(activeFilter==='PHP') data=records.filter(r=>r.currency==='PHP');
+  const list=document.getElementById('entriesList');
+  if(!data.length){ list.innerHTML=`<div class="empty-state"><div class="empty-ico">✈️</div><div>還沒有記錄</div><div style="font-size:0.75rem">說出你的花費，或點 ＋ 新增</div></div>`; return; }
+  const groups={};
+  data.forEach(r=>{ (groups[r.date]=groups[r.date]||[]).push(r); });
+  const dates=Object.keys(groups).sort((a,b)=>b.localeCompare(a));
+  list.innerHTML=dates.map(date=>{
+    const dn=tripDayOf(date);
+    const dayUSD=groups[date].filter(r=>r.type==='expense'&&r.currency==='USD').reduce((s,r)=>s+r.amount,0);
+    const dayPHP=groups[date].filter(r=>r.type==='expense'&&r.currency==='PHP').reduce((s,r)=>s+r.amount,0);
+    let summary=''; if(dayUSD>0) summary+=`-$${dayUSD.toFixed(0)} `; if(dayPHP>0) summary+=`-₱${dayPHP.toFixed(0)}`;
+    const badge=dn?`<span class="day-num-badge">Day ${dn}</span>`:'';
+    return `<div class="day-hdr">
+      <div class="day-hdr-label">${badge}<span>${fmtDate(date)}</span></div>
+      <span style="color:var(--red);font-family:'JetBrains Mono',monospace;font-size:0.7rem">${summary}</span>
+    </div>${groups[date].map(rowHTML).join('')}`;
+  }).join('');
+}
+
+function gpsRow(gps) {
+  if(gps?.name) return `<div class="entry-loc"><div class="loc-dot has-gps"></div><span class="loc-name">${gps.name}</span></div>`;
+  return `<div class="entry-loc"><div class="loc-dot no-gps"></div><span class="loc-none">未取得位置</span></div>`;
+}
+
+function rowHTML(r){
+  const moodTag=r.mood?`<span>${r.mood}</span>`:'';
+  const noteTag=r.note?`<span>· ${r.note}</span>`:'';
+  if(r.type==='exchange'){
+    return `<div class="entry-row exchange">
+      <div class="entry-emoji">💱</div>
+      <div class="entry-info">
+        <div class="entry-desc">${r.where}</div>
+        <div class="entry-meta"><span>匯率 ${r.rate.toFixed(2)}</span>${r.note?`<span>· ${r.note}</span>`:''}</div>
+        ${gpsRow(r.gps)}
+      </div>
+      <div class="entry-right">
+        <div class="entry-amt" style="color:var(--red)">-$${r.usd.toFixed(2)}</div>
+        <div class="entry-cur" style="color:var(--peso)">+₱${Math.round(r.php).toLocaleString()}</div>
+      </div>
+      <button class="del-btn" onclick="deleteRecord(${r.id})">✕</button>
+    </div>`;
+  }
+  const sym=r.currency==='USD'?'$':'₱';
+  const amt=r.currency==='USD'?r.amount.toFixed(2):Math.round(r.amount).toLocaleString();
+  return `<div class="entry-row expense">
+    <div class="entry-emoji">${catEmoji(r.cat||'')}</div>
+    <div class="entry-info">
+      <div class="entry-desc">${r.desc}</div>
+      <div class="entry-meta">${moodTag}${noteTag}</div>
+      ${gpsRow(r.gps)}
+    </div>
+    <div class="entry-right">
+      <div class="entry-amt" style="color:var(--red)">-${sym}${amt}</div>
+      <div class="entry-cur">${r.currency}</div>
+    </div>
+    <button class="del-btn" onclick="deleteRecord(${r.id})">✕</button>
+  </div>`;
+}
+
+function setFilter(id){ activeFilter=id; renderLedger(); }
+function catEmoji(cat){
+  const m={'餐飲':'🍜','交通':'🚗','住宿':'🏨','景點':'🎫','活動':'🎫','購物':'🛒','醫藥':'💊','通訊':'📶','機票':'✈','伴手禮':'🎁','其他':'🔮'};
+  for(const k of Object.keys(m)) if(cat.includes(k)) return m[k]; return '🔮';
+}
+
+// ══════════════════════════════════
+// EXPORT
+// ══════════════════════════════════
+function renderExport(){
+  document.getElementById('exportWrap').innerHTML=`
+    <div class="exp-card">
+      <h3>輸出格式</h3>
+      <div class="fmt-row">
+        <div class="fmt-btn ${exportFormat==='blog'?'active':''}" onclick="setExpFmt('blog')">✍️<br>部落格<br>Markdown</div>
+        <div class="fmt-btn ${exportFormat==='table'?'active':''}" onclick="setExpFmt('table')">📊<br>純文字<br>表格</div>
+        <div class="fmt-btn ${exportFormat==='csv'?'active':''}" onclick="setExpFmt('csv')">📄<br>CSV<br>試算表</div>
+      </div>
+    </div>
+    <div class="exp-card">
+      <h3>預覽</h3>
+      <div class="preview-box">${escHtml(generateExport())}</div>
+    </div>
+    <div class="exp-btns">
+      <button class="exp-action-btn primary" onclick="copyExport()">📋 複製全文</button>
+      <button class="exp-action-btn secondary" onclick="shareExport()">📤 分享</button>
+    </div>`;
+}
+function setExpFmt(f){ exportFormat=f; renderExport(); }
+
+function generateExport(){
+  const b=calcBalance();
+  const expenses=records.filter(r=>r.type==='expense');
+  const exchanges=records.filter(r=>r.type==='exchange');
+  const usdTotal=expenses.filter(r=>r.currency==='USD').reduce((s,r)=>s+r.amount,0);
+  const phpTotal=expenses.filter(r=>r.currency==='PHP').reduce((s,r)=>s+r.amount,0);
+
+  if(exportFormat==='blog'){
+    let out=`# 菲律賓旅遊記帳｜2025 年 3 月 31 日 – 4 月 7 日\n\n`;
+    out+=`> 旅費本自動匯出，含 GPS 位置記錄。\n\n`;
+    out+=`## 💰 預算總覽\n\n`;
+    out+=`| 項目 | 金額 |\n|------|------|\n`;
+    out+=`| 起始預算 | USD $${BUDGET_USD.toLocaleString()} |\n`;
+    out+=`| USD 總支出 | $${usdTotal.toFixed(2)} |\n`;
+    out+=`| PHP 總支出 | ₱${Math.round(phpTotal).toLocaleString()} |\n`;
+    out+=`| 剩餘美金 | $${b.usdBalance.toFixed(2)} |\n`;
+    out+=`| 剩餘披索 | ₱${Math.round(b.phpBalance).toLocaleString()} |\n\n`;
+
+    if(exchanges.length){
+      out+=`## 💱 換匯記錄\n\n`;
+      exchanges.forEach(r=>{
+        out+=`- **${r.where}**：$${r.usd} USD → ₱${Math.round(r.php).toLocaleString()} PHP（匯率 ${r.rate.toFixed(2)}）`;
+        if(r.gps?.name) out+=`\n  📍 ${r.gps.name}`;
+        out+='\n';
+      });
+      out+='\n';
+    }
+
+    const catMap={};
+    expenses.forEach(r=>{ if(!catMap[r.cat]) catMap[r.cat]={usd:0,php:0}; if(r.currency==='USD') catMap[r.cat].usd+=r.amount; else catMap[r.cat].php+=r.amount; });
+    if(Object.keys(catMap).length){
+      out+=`## 📊 消費分類\n\n`;
+      out+=`| 類別 | USD | PHP |\n|------|-----|-----|\n`;
+      Object.entries(catMap).sort((a,b)=>(b[1].usd*56+b[1].php)-(a[1].usd*56+a[1].php)).forEach(([cat,v])=>{
+        out+=`| ${catEmoji(cat)} ${cat} | ${v.usd>0?'$'+v.usd.toFixed(2):'-'} | ${v.php>0?'₱'+Math.round(v.php).toLocaleString():'-'} |\n`;
+      });
+      out+='\n';
+    }
+
+    // Per-day sections
+    for(let day=1; day<=TRIP_DAYS; day++){
+      const dateArr=['2025-03-31','2025-04-01','2025-04-02','2025-04-03','2025-04-04','2025-04-05','2025-04-06','2025-04-07'];
+      const date=dateArr[day-1];
+      const dayItems=expenses.filter(r=>r.date===date);
+      const dayExch=exchanges.filter(r=>r.date===date);
+      if(!dayItems.length&&!dayExch.length) continue;
+      const dayUSD=dayItems.filter(r=>r.currency==='USD').reduce((s,r)=>s+r.amount,0);
+      const dayPHP=dayItems.filter(r=>r.currency==='PHP').reduce((s,r)=>s+r.amount,0);
+      out+=`## Day ${day}・${date.slice(5).replace('-','/')}\n\n`;
+      if(dayExch.length){ dayExch.forEach(r=>{ out+=`> 💱 ${r.where} 換匯：$${r.usd}→₱${Math.round(r.php).toLocaleString()}（@${r.rate.toFixed(2)}）\n`; }); out+='\n'; }
+      dayItems.forEach(r=>{
+        const sym=r.currency==='USD'?'$':'₱';
+        const amt=r.currency==='USD'?r.amount.toFixed(2):Math.round(r.amount).toLocaleString();
+        out+=`**${catEmoji(r.cat)} ${r.desc}**　${sym}${amt} ${r.currency}`;
+        if(r.mood) out+=`　${r.mood}`;
+        out+='\n';
+        if(r.gps?.name) out+=`📍 *${r.gps.name}*\n`;
+        if(r.note) out+=`> ${r.note}\n`;
+        out+='\n';
+      });
+      out+=`*Day ${day} 小計：`;
+      if(dayUSD>0) out+=`$${dayUSD.toFixed(2)} USD `;
+      if(dayPHP>0) out+=`₱${Math.round(dayPHP).toLocaleString()} PHP`;
+      out+=`*\n\n---\n\n`;
+    }
+    return out;
+
+  } else if(exportFormat==='table'){
+    const DATES=['2025-03-31','2025-04-01','2025-04-02','2025-04-03','2025-04-04','2025-04-05','2025-04-06','2025-04-07'];
+    let out=`${'═'.repeat(52)}\n  菲律賓旅費記帳  3/31 – 4/7\n${'═'.repeat(52)}\n\n`;
+    DATES.forEach((date,i)=>{
+      const dayItems=[...expenses,...exchanges].filter(r=>r.date===date);
+      if(!dayItems.length) return;
+      out+=`[ Day ${i+1} · ${date.slice(5).replace('-','/')} ]\n`;
+      dayItems.forEach(r=>{
+        if(r.type==='exchange'){
+          out+=`  💱 ${r.where.padEnd(14).slice(0,14)}  -$${String(r.usd.toFixed(2)).padStart(7)} → +₱${Math.round(r.php).toLocaleString()}\n`;
+          if(r.gps?.name) out+=`     📍 ${r.gps.name}\n`;
+        } else {
+          const sym=r.currency==='USD'?'$':'₱'; const amt=r.currency==='USD'?r.amount.toFixed(2):Math.round(r.amount).toLocaleString();
+          out+=`  ${catEmoji(r.cat)} ${r.desc.padEnd(14).slice(0,14)}  -${sym}${String(amt).padStart(8)} ${r.currency}${r.mood?' '+r.mood:''}\n`;
+          if(r.gps?.name) out+=`     📍 ${r.gps.name}\n`;
+        }
+      });
+      const du=expenses.filter(r=>r.date===date&&r.currency==='USD').reduce((s,r)=>s+r.amount,0);
+      const dp=expenses.filter(r=>r.date===date&&r.currency==='PHP').reduce((s,r)=>s+r.amount,0);
+      out+=`  ${'─'.repeat(40)}\n`;
+      out+=`  小計：`; if(du>0)out+=`-$${du.toFixed(2)} `; if(dp>0)out+=`-₱${Math.round(dp).toLocaleString()}`; out+='\n\n';
+    });
+    out+=`${'═'.repeat(52)}\n`;
+    out+=`USD 總支出：$${usdTotal.toFixed(2)}\nPHP 總支出：₱${Math.round(phpTotal).toLocaleString()}\n`;
+    out+=`剩餘 USD：$${b.usdBalance.toFixed(2)}\n剩餘 PHP：₱${Math.round(b.phpBalance).toLocaleString()}\n`;
+    out+=`${'═'.repeat(52)}`;
+    return out;
+
+  } else { // CSV
+    let out='日期,Day,類型,幣別,金額,品項,類別,心情,備註,GPS緯度,GPS經度,GPS地點\n';
+    [...records].sort((a,b)=>a.date.localeCompare(b.date)).forEach(r=>{
+      const dn=tripDayOf(r.date)||'';
+      if(r.type==='exchange'){
+        out+=`${r.date},Day${dn},換匯,USD,-${r.usd},"${r.where}",換匯,,,${r.gps?.lat||''},${r.gps?.lng||''},"${r.gps?.name||''}"\n`;
+        out+=`${r.date},Day${dn},換匯,PHP,+${Math.round(r.php)},"${r.where} (入)",換匯,,,${r.gps?.lat||''},${r.gps?.lng||''},"${r.gps?.name||''}"\n`;
+      } else {
+        out+=`${r.date},Day${dn},支出,${r.currency},-${r.amount},"${r.desc}","${r.cat}","${r.mood||''}","${r.note||''}",${r.gps?.lat||''},${r.gps?.lng||''},"${r.gps?.name||''}"\n`;
+      }
+    });
+    return out;
+  }
+}
+
+function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function copyExport(){
+  const t=generateExport();
+  if(navigator.clipboard) navigator.clipboard.writeText(t).then(()=>showToast('✓ 已複製')).catch(()=>fbCopy(t));
+  else fbCopy(t);
+  function fbCopy(t){ const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();document.execCommand('copy');document.body.removeChild(a);showToast('✓ 已複製'); }
+}
+function shareExport(){ const t=generateExport(); if(navigator.share) navigator.share({title:'菲律賓旅費記帳',text:t}).catch(()=>{}); else copyExport(); }
+
+// ══════════════════════════════════
+// CHAT
+// ══════════════════════════════════
+const WELCOME=`嗨！旅費本啟動 ✈️\n\n菲律賓 · 3/31–4/7 · 8天\n起始預算：USD $1,997\n\n直接說：\n• 「午餐 350 披索」\n• 「Grab 2.5 美金」\n• 「150 美金換 8500 披索，在機場」\n• 「查餘額」\n\n每筆記錄自動抓 GPS 📍\n（請在 Safari 開啟以允許定位）`;
+
+window.onload=()=>{
+  updateHeader();
+  if(!chatLog.length){ appendMsg('ai',WELCOME,false); }
+  else chatLog.forEach(m=>appendMsg(m.role,m.text,false));
+  scrollChat();
+};
+
+function appendMsg(role,text,doSave=true){
+  if(doSave){ chatLog.push({role,text}); saveChat(); }
+  const wrap=document.createElement('div'); wrap.className='msg '+role;
+  const av=document.createElement('div'); av.className='avatar'; av.textContent=role==='ai'?'✈':'我';
+  const bub=document.createElement('div'); bub.className='bubble';
+  bub.innerHTML=text.replace(/\n/g,'<br>');
+  wrap.appendChild(av); wrap.appendChild(bub);
+  document.getElementById('chatMsgs').appendChild(wrap);
+  scrollChat();
+}
+function scrollChat(){ const el=document.getElementById('chatMsgs'); el.scrollTop=el.scrollHeight; }
+function showTyping(){ const w=document.createElement('div');w.className='msg ai';w.id='typing-el';const a=document.createElement('div');a.className='avatar';a.textContent='✈';const b=document.createElement('div');b.className='bubble';b.innerHTML='<div class="typing"><span></span><span></span><span></span></div>';w.appendChild(a);w.appendChild(b);document.getElementById('chatMsgs').appendChild(w);scrollChat(); }
+function hideTyping(){ const t=document.getElementById('typing-el');if(t)t.remove(); }
+function autoResize(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,100)+'px'; }
+function handleKey(e){ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); sendChat(); } }
+function quickSend(t){ document.getElementById('chatInput').value=t; sendChat(); }
+
+async function sendChat(){
+  const inp=document.getElementById('chatInput');
+  const text=inp.value.trim(); if(!text) return;
+  inp.value=''; inp.style.height='auto';
+  appendMsg('user',text); showTyping();
+  const reply=await processChat(text);
+  hideTyping(); appendMsg('ai',reply); updateHeader();
+}
+
+// ══════════════════════════════════
+// NLP
+// ══════════════════════════════════
+function today(){ return new Date().toISOString().split('T')[0]; }
+function fmtDate(d){ const dt=new Date(d+'T00:00:00'); const days=['日','一','二','三','四','五','六']; const dn=tripDayOf(d); const dayStr=dn?` (Day ${dn})`:''; return d===today()?`今天${dayStr}`:`${dt.getMonth()+1}/${dt.getDate()}${dayStr}`; }
+
+function parseNL(text){
+  const phpRE=/披索|piso|php|peso|₱/i;
+  const exchKW=/換匯|換了?|兌換/;
+  const amts=[...text.matchAll(/(\d[\d,]*\.?\d*)/g)].map(m=>parseFloat(m[1].replace(/,/g,'')));
+  if(!amts.length) return null;
+  if(exchKW.test(text)&&amts.length>=2){
+    const usd=amts[0],php=amts[1];
+    const whereM=text.match(/在([^\d，,。]+?)(換|兌|$)/); const where=(whereM?.[1]||'').trim()||'未指定';
+    return {type:'exchange',usd,php,where,note:'',date:today(),rate:php/usd};
+  }
+  const amount=amts[0];
+  const currency=phpRE.test(text)?'PHP':'USD';
+  let cat='其他';
+  if(/早餐|午餐|晚餐|吃飯|餐廳|咖啡|飲料|便當|小吃|食物|吃|喝|brunch|dinner|lunch/.test(text)) cat='餐飲';
+  else if(/計程車|Grab|grab|Uber|uber|公車|客運|船|渡輪|jeep|三輪車|交通|oil|taxi/.test(text)) cat='交通';
+  else if(/飯店|旅館|民宿|hostel|hotel|住宿|check|airbnb/.test(text)) cat='住宿';
+  else if(/景點|門票|票|tour|導覽|遊覽|活動|體驗/.test(text)) cat='景點';
+  else if(/買|購物|衣服|紀念品|超商|超市|mall|shop/.test(text)) cat='購物';
+  else if(/藥|醫|診所|clinic/.test(text)) cat='醫藥';
+  else if(/網路|SIM|sim|電話|data/.test(text)) cat='通訊';
+  else if(/機票|飛機|航空|flight/.test(text)) cat='機票';
+  else if(/伴手禮|禮物|帶回/.test(text)) cat='伴手禮';
+  const desc=text.replace(/\d[\d,]*\.?\d*/g,'').replace(/披索|piso|php|peso|₱|美金|美元|usd|\$|花了?|付了?|今天|昨天|晚上|下午|早上|元|塊/gi,'').trim().slice(0,20)||cat;
+  return {type:'expense',amount,currency,desc,cat,mood:'',note:'',date:today()};
+}
+
+async function processChat(text){
+  const b=calcBalance();
+  if(/餘額|剩多少|還有多少|查餘額|budget/.test(text)){
+    const dn=todayDayNum();
+    return `💰 目前餘額\n\n🇺🇸 USD：$${b.usdBalance.toFixed(2)}\n已花 $${b.usdSpent.toFixed(2)}／$${BUDGET_USD}\n\n🇵🇭 PHP：₱${Math.round(b.phpBalance).toLocaleString()}\n換匯 ${records.filter(r=>r.type==='exchange').length} 次\n\n${typeof dn==='number'?`現在是 Day ${dn}，還有 ${TRIP_DAYS-dn} 天`:''}`;
+  }
+  if(/今天|今日/.test(text)&&/花了|多少|支出/.test(text)){
+    const td=records.filter(r=>r.type==='expense'&&r.date===today());
+    if(!td.length) return '今天還沒有支出記錄！';
+    const u=td.filter(r=>r.currency==='USD').reduce((s,r)=>s+r.amount,0);
+    const p=td.filter(r=>r.currency==='PHP').reduce((s,r)=>s+r.amount,0);
+    return `📊 今日（${fmtDate(today())}）\n${td.length} 筆支出\n\n🇺🇸 $${u.toFixed(2)} USD\n🇵🇭 ₱${Math.round(p).toLocaleString()} PHP\n\n${td.map(r=>`• ${r.desc} ${r.currency==='USD'?'$'+r.amount.toFixed(2):'₱'+Math.round(r.amount)}`).join('\n')}`;
+  }
+  if(/總共|總計|全部|這趟|整趟/.test(text)){
+    const u=records.filter(r=>r.type==='expense'&&r.currency==='USD').reduce((s,r)=>s+r.amount,0);
+    const p=records.filter(r=>r.type==='expense'&&r.currency==='PHP').reduce((s,r)=>s+r.amount,0);
+    return `🧾 旅程總計（${records.filter(r=>r.type==='expense').length} 筆）\n\n🇺🇸 USD 支出：$${u.toFixed(2)}\n🇵🇭 PHP 支出：₱${Math.round(p).toLocaleString()}\n\n剩餘 USD：$${b.usdBalance.toFixed(2)}\n剩餘 PHP：₱${Math.round(b.phpBalance).toLocaleString()}`;
+  }
+  const parsed=parseNL(text);
+  if(parsed){
+    const gps=await getGPSSilent();
+    parsed.gps=gps;
+    addRecord(parsed);
+    updateHeader();
+    const loc = gps?.name ? `\n📍 ${gps.name}` : '\n⚠️ 未取得位置（記錄仍已儲存）';
+    if(parsed.type==='exchange') return `✓ 換匯已記錄\n💱 ${parsed.where}\n$${parsed.usd} → ₱${Math.round(parsed.php).toLocaleString()}（@${parsed.rate.toFixed(2)}）${loc}`;
+    const sym=parsed.currency==='USD'?'$':'₱';
+    const amt=parsed.currency==='USD'?parsed.amount.toFixed(2):Math.round(parsed.amount).toLocaleString();
+    return `✓ 記錄完成 ${catEmoji(parsed.cat)}\n${parsed.desc}　-${sym}${amt} ${parsed.currency}${loc}`;
+  }
+  return await callAI(text);
+}
+
+async function callAI(userText){
+  const b=calcBalance();
+  const recent=records.slice(0,5).map(r=>r.type==='exchange'?`換匯 $${r.usd}→₱${Math.round(r.php)}`:`${r.currency==='USD'?'$'+r.amount.toFixed(2):'₱'+Math.round(r.amount)} ${r.desc}`).join('，');
+  const dn=todayDayNum();
+  const sys=`你是旅遊記帳助手，服務在菲律賓旅遊的台灣人（3/31-4/7，${typeof dn==='number'?`今天是Day${dn}`:''}）。用繁體中文回覆，親切簡短，不超過80字。\n餘額：USD $${b.usdBalance.toFixed(2)}，PHP ₱${Math.round(b.phpBalance).toLocaleString()}。最近：${recent||'無'}`;
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:sys,messages:[{role:'user',content:userText}]})});
+    const d=await res.json();
+    return d.content?.[0]?.text||'可以換個方式說嗎？';
+  }catch{ return '沒有網路，但記帳正常！試試：「午餐 250 披索」'; }
+}
+
+function showToast(msg){ const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200); }
+</script>
+</body>
+</html>
