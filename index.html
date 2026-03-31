@@ -335,6 +335,11 @@ select option{background:var(--card2)}
         <option>📶 通訊</option><option>✈ 機票</option><option>🎁 伴手禮</option>
         <option>🔮 其他</option>
       </select>
+      <span class="field-label">付款方式</span>
+      <div class="cur-toggle">
+        <div class="cur-btn usd active" id="payCC" onclick="setPay('cash')">💵 現金</div>
+        <div class="cur-btn peso" id="payCard" onclick="setPay('card')">💳 刷卡</div>
+      </div>
       <span class="field-label">心情（選填）</span>
       <div class="mood-row">
         <div class="mood-btn" onclick="toggleMood(this,'😊')">😊 開心</div>
@@ -419,6 +424,7 @@ let exportFormat = 'blog';
 let modalType    = 'expense';
 let selectedCur  = 'USD';
 let selectedMood = '';
+let selectedPay  = 'cash';  // 'cash' | 'card'
 let currentGPS   = null;
 let knownUsers   = [];   // ordered list of names seen, for colour assignment
 let chatLog      = JSON.parse(localStorage.getItem('trv_chat') || '[]');
@@ -696,6 +702,11 @@ window.setCur = function(c) {
   document.getElementById('curUSD').classList.toggle('active',c==='USD');
   document.getElementById('curPHP').classList.toggle('active',c==='PHP');
 };
+window.setPay = function(p) {
+  selectedPay=p;
+  document.getElementById('payCC').classList.toggle('active', p==='cash');
+  document.getElementById('payCard').classList.toggle('active', p==='card');
+};
 window.toggleMood = function(el,emoji) {
   const was=el.classList.contains('active');
   document.querySelectorAll('.mood-btn').forEach(b=>b.classList.remove('active'));
@@ -731,7 +742,7 @@ window.submitModal = async function() {
     closeModal();
     const gpsMsg = currentGPS?.name ? `📍 ${currentGPS.name}` : '⚠️ 未取得 GPS';
     showToast(`✓ 記錄中… ${gpsMsg}`);
-    await addRecord({type:'expense',amount,currency:selectedCur,desc,cat,mood:selectedMood,note,date:today(),gps:currentGPS?{...currentGPS}:null});
+    await addRecord({type:'expense',amount,currency:selectedCur,desc,cat,pay:selectedPay,mood:selectedMood,note,date:today(),gps:currentGPS?{...currentGPS}:null});
     resetModal();
   }
   updateHeader();
@@ -740,6 +751,9 @@ window.submitModal = async function() {
 function resetModal(){
   ['mDesc','mAmount','mNote','exUSD','exPHP','exWhere','exNote'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   selectedMood=''; document.querySelectorAll('.mood-btn').forEach(b=>b.classList.remove('active'));
+  selectedPay='cash';
+  document.getElementById('payCC').classList.add('active');
+  document.getElementById('payCard').classList.remove('active');
   document.getElementById('ratePreview').textContent='匯率：—';
 }
 
@@ -801,6 +815,9 @@ function gpsRow(gps) {
 function rowHTML(r) {
   const moodTag=r.mood?`<span>${r.mood}</span>`:'';
   const noteTag=r.note?`<span>· ${r.note}</span>`:'';
+  const payTag=r.pay==='card'
+    ? `<span style="color:var(--peso);background:rgba(78,205,196,0.1);border:1px solid rgba(78,205,196,0.25);border-radius:20px;padding:1px 7px;font-size:0.65rem">💳 刷卡</span>`
+    : `<span style="color:var(--muted);font-size:0.65rem">💵 現金</span>`;
   const canDel = r.who === myName;
   const delBtn = `<button class="del-btn" onclick="deleteRecord('${r.fbKey}','${r.who||''}')" style="opacity:${canDel?'0.4':'0.2'}">✕</button>`;
 
@@ -826,7 +843,7 @@ function rowHTML(r) {
     <div class="entry-emoji">${catEmoji(r.cat||'')}</div>
     <div class="entry-info">
       <div class="entry-desc">${r.desc}</div>
-      <div class="entry-meta">${moodTag}${noteTag}</div>
+      <div class="entry-meta">${payTag}${moodTag}${noteTag}</div>
       ${whoBadge(r.who)}
       ${gpsRow(r.gps)}
     </div>
@@ -925,7 +942,7 @@ function generateExport() {
       dayItems.forEach(r=>{
         const sym=r.currency==='USD'?'$':'₱';
         const amt=r.currency==='USD'?r.amount.toFixed(2):Math.round(r.amount).toLocaleString();
-        out+=`**${catEmoji(r.cat)} ${r.desc}**　${sym}${amt} ${r.currency}`;
+        out+=`**${catEmoji(r.cat)} ${r.desc}**　${sym}${amt} ${r.currency}　${r.pay==='card'?'💳 刷卡':'💵 現金'}`;
         if(r.mood) out+=`　${r.mood}`;
         out+=`　*by ${r.who}*\n`;
         if(r.gps?.name) out+=`📍 *${r.gps.name}*\n`;
@@ -963,14 +980,14 @@ function generateExport() {
     return out;
 
   } else {
-    let out='日期,Day,類型,幣別,金額,品項,類別,心情,備註,記帳者,GPS緯度,GPS經度,GPS地點\n';
+    let out='日期,Day,類型,幣別,金額,品項,類別,付款方式,心情,備註,記帳者,GPS緯度,GPS經度,GPS地點\n';
     [...records].sort((a,b)=>(a.ts||0)-(b.ts||0)).forEach(r=>{
       const dn=tripDayOf(r.date)||'';
       if(r.type==='exchange'){
-        out+=`${r.date},Day${dn},換匯,USD,-${r.usd},"${r.where}",換匯,,,"${r.who||''}",${r.gps?.lat||''},${r.gps?.lng||''},"${r.gps?.name||''}"\n`;
-        out+=`${r.date},Day${dn},換匯,PHP,+${Math.round(r.php)},"${r.where}(入)",換匯,,,"${r.who||''}",${r.gps?.lat||''},${r.gps?.lng||''},"${r.gps?.name||''}"\n`;
+        out+=`${r.date},Day${dn},換匯,USD,-${r.usd},"${r.where}",換匯,現金,,,"${r.who||''}",${r.gps?.lat||''},${r.gps?.lng||''},"${r.gps?.name||''}"\n`;
+        out+=`${r.date},Day${dn},換匯,PHP,+${Math.round(r.php)},"${r.where}(入)",換匯,現金,,,"${r.who||''}",${r.gps?.lat||''},${r.gps?.lng||''},"${r.gps?.name||''}"\n`;
       } else {
-        out+=`${r.date},Day${dn},支出,${r.currency},-${r.amount},"${r.desc}","${r.cat}","${r.mood||''}","${r.note||''}","${r.who||''}",${r.gps?.lat||''},${r.gps?.lng||''},"${r.gps?.name||''}"\n`;
+        out+=`${r.date},Day${dn},支出,${r.currency},-${r.amount},"${r.desc}","${r.cat}","${r.pay==='card'?'刷卡':'現金'}","${r.mood||''}","${r.note||''}","${r.who||''}",${r.gps?.lat||''},${r.gps?.lng||''},"${r.gps?.name||''}"\n`;
       }
     });
     return out;
