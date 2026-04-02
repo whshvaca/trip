@@ -316,6 +316,8 @@ select option{background:var(--card2)}
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-title" id="modalTitle">記錄支出</div>
+    <span class="field-label">消費日期</span>
+    <input type="date" id="mDate" style="color-scheme:dark;margin-bottom:14px">
     <div class="type-toggle" id="typeToggle">
       <div class="type-btn expense active" id="tExpense" onclick="setModalType('expense')">💸 支出</div>
       <div class="type-btn exchange" id="tExchange" onclick="setModalType('exchange')">💱 換匯</div>
@@ -365,8 +367,6 @@ select option{background:var(--card2)}
       <span class="field-label">備註（選填）</span>
       <input type="text" id="exNote" placeholder="">
     </div>
-    <span class="field-label">消費日期</span>
-    <input type="date" id="mDate" style="color-scheme:dark">
     <div class="gps-status-bar gps-loading" id="gpsBar">
       <div class="gps-icon">📍</div>
       <div class="gps-text" id="gpsTextBox">
