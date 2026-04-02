@@ -1124,83 +1124,97 @@ function renderDebug() {
   const usdExp    = expenses.filter(r=>r.currency==='USD');
   const phpExp    = expenses.filter(r=>r.currency==='PHP');
 
-  // Flag bad records
   function flags(r) {
     const f = [];
-    if(!r.date) f.push('無日期');
-    else if(!TRIP_DATES.includes(r.date)) f.push('日期超出旅程');
-    if(r.type==='expense' && (!r.amount || r.amount<=0)) f.push('金額異常');
-    if(r.type==='exchange' && (!r.usd||!r.php||r.usd<=0||r.php<=0)) f.push('換匯金額異常');
+    if(!r.date) {
+      f.push('❌ 沒有日期');
+    } else if(!TRIP_DATES.includes(r.date)) {
+      const dn = tripDayOf(r.date);
+      f.push(`❌ 日期 ${r.date} 不在旅程內（3/31–4/7）`);
+    }
+    if(r.type==='expense') {
+      if(!r.amount || Number(r.amount)<=0) f.push(`❌ 金額異常：${r.amount}`);
+      if(!r.currency) f.push('❌ 缺少幣別');
+      if(!r.desc) f.push('⚠️ 沒有品項描述');
+    }
+    if(r.type==='exchange') {
+      if(!r.usd || Number(r.usd)<=0) f.push(`❌ USD 金額異常：${r.usd}`);
+      if(!r.php || Number(r.php)<=0) f.push(`❌ PHP 金額異常：${r.php}`);
+    }
     return f;
   }
-  const badCount = records.filter(r=>flags(r).length>0).length;
 
-  // ── Section 1: Calculation walkthrough ──
-  let html = `<div class="debug-section">
-    <h3>💰 帳務核算步驟</h3>`;
+  const sorted = [...records].sort((a,b)=>(a.date||'').localeCompare(b.date||'') || (a.ts||0)-(b.ts||0));
+  const badRecs  = sorted.filter(r=>flags(r).length>0);
+  const goodRecs = sorted.filter(r=>flags(r).length===0);
 
-  html += `<div class="calc-row pos"><span class="lbl">起始美金預算</span><span class="val">$${BUDGET_USD.toFixed(2)}</span></div>`;
+  function recCard(r, isBad) {
+    const f = flags(r);
+    const dn = tripDayOf(r.date);
+    const sym = r.currency==='USD'?'$':'₱';
 
-  usdExp.forEach(r=>{
-    const flag = flags(r).length ? `<span class="flag-tag">⚠️</span>` : '';
-    html += `<div class="calc-row neg"><span class="lbl">${r.date||'?'} ${r.desc}${flag}</span><span class="val">-$${Number(r.amount).toFixed(2)}</span></div>`;
-  });
-  exchanges.forEach(r=>{
-    const flag = flags(r).length ? `<span class="flag-tag">⚠️</span>` : '';
-    html += `<div class="calc-row neg"><span class="lbl">${r.date||'?'} 換匯@${r.where}${flag}</span><span class="val">-$${Number(r.usd).toFixed(2)}</span></div>`;
-  });
+    let amtLine = '';
+    let descLine = '';
+    if(r.type==='exchange') {
+      amtLine = `<span style="color:var(--red)">-$${Number(r.usd||0).toFixed(2)}</span> → <span style="color:var(--green)">+₱${Math.round(r.php||0).toLocaleString()}</span>`;
+      descLine = `💱 ${r.where||'未指定'}`;
+    } else {
+      const amt = r.currency==='USD' ? Number(r.amount||0).toFixed(2) : Math.round(r.amount||0).toLocaleString();
+      amtLine = `<span style="color:var(--red)">-${sym}${amt}</span>`;
+      descLine = `${catEmoji(r.cat||'')} ${r.desc||'（無描述）'}`;
+    }
+
+    const borderColor = isBad ? 'var(--red)' : 'var(--border)';
+    const bgColor = isBad ? 'rgba(255,82,82,0.05)' : 'var(--card2)';
+
+    return `<div style="background:${bgColor};border:1px solid ${borderColor};border-radius:10px;padding:10px 12px;margin-bottom:8px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.85rem;font-weight:500;margin-bottom:3px">${descLine}</div>
+          <div style="font-size:0.75rem;margin-bottom:4px">${amtLine}</div>
+          <div style="font-size:0.68rem;color:var(--muted)">
+            📅 ${r.date||'無日期'}${dn?' (Day '+dn+')':' ⚠️'}
+            　👤 ${r.who||'?'}
+            ${r.pay==='card'?'　💳 刷卡':''}
+          </div>
+          ${isBad ? `<div style="margin-top:6px">${f.map(x=>`<div style="font-size:0.72rem;color:var(--red);margin-top:2px">${x}</div>`).join('')}</div>` : ''}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+          <button class="edit-btn" onclick="editRecord('${r.fbKey}')" style="background:rgba(247,165,65,0.1);border:1px solid rgba(247,165,65,0.3);border-radius:8px;padding:5px 10px;font-size:0.75rem;color:var(--glow)">✏️ 編輯</button>
+          <button class="debug-del" onclick="deleteRecord('${r.fbKey}','${r.who||''}')" style="background:rgba(255,82,82,0.08);border:1px solid rgba(255,82,82,0.2);border-radius:8px;padding:5px 10px;font-size:0.75rem;color:var(--red);opacity:1">✕ 刪除</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  let html = '';
+
+  // ── 帳務核算 ──
+  html += `<div class="debug-section"><h3>💰 帳務核算</h3>`;
+  html += `<div class="calc-row pos"><span class="lbl">起始美金</span><span class="val">$${BUDGET_USD.toFixed(2)}</span></div>`;
+  html += `<div class="calc-row neg"><span class="lbl">USD 支出合計（${usdExp.length} 筆）</span><span class="val">-$${usdExp.reduce((s,r)=>s+Number(r.amount||0),0).toFixed(2)}</span></div>`;
+  html += `<div class="calc-row neg"><span class="lbl">換匯扣美金合計（${exchanges.length} 次）</span><span class="val">-$${exchanges.reduce((s,r)=>s+Number(r.usd||0),0).toFixed(2)}</span></div>`;
   html += `<div class="calc-row result"><span class="lbl">USD 剩餘</span><span class="val">$${b.usdBalance.toFixed(2)}</span></div>`;
-
-  html += `<div style="height:12px"></div>`;
-  html += `<div class="calc-row pos"><span class="lbl">PHP 換匯入（${exchanges.length} 次）</span><span class="val">₱${Math.round(b.phpIn).toLocaleString()}</span></div>`;
-  exchanges.forEach(r=>{
-    html += `<div class="calc-row" style="padding-left:12px"><span class="lbl" style="font-size:0.72rem">${r.date||'?'} ${r.where}</span><span class="val" style="color:var(--green)">+₱${Math.round(r.php).toLocaleString()}</span></div>`;
-  });
-  phpExp.forEach(r=>{
-    const flag = flags(r).length ? `<span class="flag-tag">⚠️</span>` : '';
-    html += `<div class="calc-row neg"><span class="lbl">${r.date||'?'} ${r.desc}${flag}</span><span class="val">-₱${Math.round(r.amount).toLocaleString()}</span></div>`;
-  });
+  html += `<div style="height:10px"></div>`;
+  html += `<div class="calc-row pos"><span class="lbl">換匯入 PHP（${exchanges.length} 次）</span><span class="val">+₱${Math.round(b.phpIn).toLocaleString()}</span></div>`;
+  html += `<div class="calc-row neg"><span class="lbl">PHP 支出合計（${phpExp.length} 筆）</span><span class="val">-₱${Math.round(phpExp.reduce((s,r)=>s+Number(r.amount||0),0)).toLocaleString()}</span></div>`;
   html += `<div class="calc-row result"><span class="lbl">PHP 剩餘</span><span class="val">₱${Math.round(b.phpBalance).toLocaleString()}</span></div>`;
   html += `</div>`;
 
-  // ── Section 2: Raw records table ──
-  html += `<div class="debug-section">
-    <h3>🗄 原始資料（${records.length} 筆${badCount>0?`，<span style="color:var(--red)">${badCount} 筆有問題</span>`:'，全部正常'}）</h3>
-    <div style="overflow-x:auto">
-    <table class="raw-table">
-      <tr>
-        <th>日期</th><th>類型</th><th>金額</th><th>品項／地點</th>
-        <th>幣別</th><th>記帳者</th><th>狀態</th><th></th>
-      </tr>`;
+  // ── 有問題的筆 ──
+  if(badRecs.length > 0) {
+    html += `<div class="debug-section">
+      <h3 style="color:var(--red)">⚠️ 有問題的記錄（${badRecs.length} 筆）</h3>`;
+    badRecs.forEach(r => { html += recCard(r, true); });
+    html += `</div>`;
+  } else {
+    html += `<div class="debug-section"><div style="text-align:center;color:var(--green);padding:10px;font-size:0.85rem">✓ 所有記錄日期與金額正常</div></div>`;
+  }
 
-  const sorted = [...records].sort((a,b)=>(a.date||'').localeCompare(b.date||'') || (a.ts||0)-(b.ts||0));
-  sorted.forEach(r=>{
-    const f = flags(r);
-    const isBad = f.length > 0;
-    const dn = tripDayOf(r.date);
-    const dayStr = dn ? `D${dn}` : '?';
-    let amtStr='', descStr='';
-    if(r.type==='exchange'){
-      amtStr = `-$${Number(r.usd).toFixed(2)}<br>+₱${Math.round(r.php)}`;
-      descStr = r.where||'';
-    } else {
-      const sym = r.currency==='USD'?'$':'₱';
-      amtStr = `-${sym}${r.currency==='USD'?Number(r.amount).toFixed(2):Math.round(r.amount)}`;
-      descStr = r.desc||'';
-    }
-    const flagHtml = f.map(x=>`<span class="flag-tag">${x}</span>`).join(' ');
-    html += `<tr class="${isBad?'bad':''}">
-      <td>${r.date||'—'}<br><span style="color:var(--muted);font-size:0.6rem">${dayStr}</span></td>
-      <td>${r.type==='exchange'?'💱':'💸'}</td>
-      <td>${amtStr}</td>
-      <td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(descStr)}</td>
-      <td>${r.currency||'—'}</td>
-      <td>${r.who||'—'}</td>
-      <td>${isBad?flagHtml:'✓'}</td>
-      <td><button class="debug-del" onclick="deleteRecord('${r.fbKey}','${r.who||''}')">✕</button></td>
-    </tr>`;
-  });
-  html += `</table></div></div>`;
+  // ── 全部記錄 ──
+  html += `<div class="debug-section"><h3>📋 全部記錄（${records.length} 筆，按日期排序）</h3>`;
+  sorted.forEach(r => { html += recCard(r, flags(r).length>0); });
+  html += `</div>`;
 
   document.getElementById('debugWrap').innerHTML = html;
 }
