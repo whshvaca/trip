@@ -620,12 +620,18 @@ async function getGPSSilent() {
 // BALANCE
 // ══════════════════════════════════
 function calcBalance() {
-  let usdSpent=0, phpBalance=0;
-  records.filter(r=>r.type==='exchange').forEach(r=>{ usdSpent+=r.usd; phpBalance+=r.php; });
+  let usdSpent=0, phpIn=0, phpSpent=0;
+  records.filter(r=>r.type==='exchange').forEach(r=>{ usdSpent+=r.usd; phpIn+=r.php; });
   records.filter(r=>r.type==='expense').forEach(r=>{
-    if(r.currency==='USD') usdSpent+=r.amount; else phpBalance-=r.amount;
+    if(r.currency==='USD') usdSpent+=r.amount; else phpSpent+=r.amount;
   });
-  return { usdBalance: BUDGET_USD - usdSpent, usdSpent, phpBalance };
+  return {
+    usdBalance: BUDGET_USD - usdSpent,
+    usdSpent,
+    phpIn,        // 總共換進多少披索
+    phpSpent,     // 已花多少披索
+    phpBalance: phpIn - phpSpent
+  };
 }
 
 function updateHeader() {
@@ -1151,7 +1157,8 @@ async function processChat(text){
   const b=calcBalance();
   if(/餘額|剩多少|還有多少|查餘額|budget/.test(text)){
     const dn=todayDayNum();
-    return `💰 目前餘額\n\n🇺🇸 USD：$${b.usdBalance.toFixed(2)}\n已花 $${b.usdSpent.toFixed(2)}／$${BUDGET_USD}\n\n🇵🇭 PHP：₱${Math.round(b.phpBalance).toLocaleString()}\n換匯 ${records.filter(r=>r.type==='exchange').length} 次\n\n${dn?`現在是 Day ${dn}，還有 ${TRIP_DAYS-dn} 天`:''}`;
+    const excCount=records.filter(r=>r.type==='exchange').length;
+    return `💰 目前餘額\n\n🇺🇸 美金\n起始：$${BUDGET_USD}\n已花：$${b.usdSpent.toFixed(2)}\n剩餘：$${b.usdBalance.toFixed(2)}\n\n🇵🇭 披索\n換匯入：₱${Math.round(b.phpIn).toLocaleString()}（共 ${excCount} 次）\n已花：₱${Math.round(b.phpSpent).toLocaleString()}\n剩餘：₱${Math.round(b.phpBalance).toLocaleString()}\n\n${dn?`現在是 Day ${dn}，還有 ${TRIP_DAYS-dn} 天`:''}`;
   }
   if(/今天|今日/.test(text)&&/花了|多少|支出/.test(text)){
     const td=records.filter(r=>r.type==='expense'&&r.date===today());
@@ -1162,8 +1169,7 @@ async function processChat(text){
   }
   if(/總共|總計|全部|這趟|整趟/.test(text)){
     const u=records.filter(r=>r.type==='expense'&&r.currency==='USD').reduce((s,r)=>s+r.amount,0);
-    const p=records.filter(r=>r.type==='expense'&&r.currency==='PHP').reduce((s,r)=>s+r.amount,0);
-    return `🧾 旅程總計（${records.filter(r=>r.type==='expense').length} 筆）\n\n🇺🇸 USD 支出：$${u.toFixed(2)}\n🇵🇭 PHP 支出：₱${Math.round(p).toLocaleString()}\n\n剩餘 USD：$${b.usdBalance.toFixed(2)}\n剩餘 PHP：₱${Math.round(b.phpBalance).toLocaleString()}`;
+    return `🧾 旅程總計（${records.filter(r=>r.type==='expense').length} 筆支出）\n\n🇺🇸 美金\n起始：$${BUDGET_USD}\n支出：$${u.toFixed(2)}\n剩餘：$${b.usdBalance.toFixed(2)}\n\n🇵🇭 披索\n換匯入：₱${Math.round(b.phpIn).toLocaleString()}\n支出：₱${Math.round(b.phpSpent).toLocaleString()}\n剩餘：₱${Math.round(b.phpBalance).toLocaleString()}`;
   }
   const parsed=parseNL(text);
   if(parsed){
