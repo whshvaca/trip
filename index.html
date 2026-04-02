@@ -246,7 +246,7 @@ select option{background:var(--card2)}
 <!-- ── Nickname Screen ── -->
 <div id="nickScreen">
   <div class="nick-logo">✈ 旅費本</div>
-  <div class="nick-sub">3/31 – 4/7 · 菲律賓</div>
+  <div class="nick-sub">3/31 – 4/1 · 菲律賓</div>
   <div class="nick-label">你是誰？</div>
   <input class="nick-input" id="nickInput" type="text" placeholder="輸入你的名字" maxlength="8">
   <div class="nick-presets" id="nickPresets"></div>
@@ -261,7 +261,7 @@ select option{background:var(--card2)}
   <div class="header-top">
     <div>
       <div class="app-name">✈ 旅費本</div>
-      <div class="app-sub">3/31 – 4/7 · 菲律賓</div>
+      <div class="app-sub">3/31 – 4/1 · 菲律賓</div>
     </div>
     <div class="hdr-right">
       <div class="me-badge" onclick="changeName()" title="點擊改名">
@@ -433,9 +433,9 @@ const RECORDS_REF = ref(db, 'trip/records');
 // CONSTANTS
 // ══════════════════════════════════
 const BUDGET_USD = 1997;
-const TRIP_START = '2025-03-31';
-const TRIP_DAYS  = 8;
-const TRIP_DATES = ['2025-03-31','2025-04-01','2025-04-02','2025-04-03','2025-04-04','2025-04-05','2025-04-06','2025-04-07'];
+const TRIP_START = '2026-03-31';
+const TRIP_DAYS  = 2;
+const TRIP_DATES = ['2026-03-31','2026-04-01'];
 
 // colours per user (cycles if >6 people)
 const USER_COLORS = ['#f7a541','#4ecdc4','#ff6b9d','#a8e6cf','#c3a6ff','#ffb347'];
@@ -533,7 +533,7 @@ function startApp() {
   });
 
   // init chat
-  if(!chatLog.length) appendMsg('ai', `嗨 ${myName}！旅費本已啟動 ✈️\n\n菲律賓 · 3/31–4/7 · 8天\n起始預算：USD $1,997\n\n直接說：\n• 「午餐 350 披索」\n• 「Grab 2.5 美金」\n• 「150 美金換 8500 披索，在機場」\n• 「查餘額」\n\n每筆都自動抓 GPS 📍，也會記錄是你記的 👤`, false);
+  if(!chatLog.length) appendMsg('ai', `嗨 ${myName}！旅費本已啟動 ✈️\n\n菲律賓 · 3/31–4/1 · 2天\n起始預算：USD $1,997\n\n直接說：\n• 「午餐 350 披索」\n• 「Grab 2.5 美金」\n• 「150 美金換 8500 披索，在機場」\n• 「查餘額」\n\n每筆都自動抓 GPS 📍，也會記錄是你記的 👤`, false);
   else chatLog.forEach(m => appendMsg(m.role, m.text, false));
   scrollChat();
   updateHeader();
@@ -1010,7 +1010,7 @@ function generateExport() {
   const phpTotal=expenses.filter(r=>r.currency==='PHP').reduce((s,r)=>s+r.amount,0);
 
   if(exportFormat==='blog'){
-    let out=`# 菲律賓旅遊記帳｜2025 年 3 月 31 日 – 4 月 7 日\n\n`;
+    let out=`# 菲律賓旅遊記帳｜2026 年 3 月 31 日 – 4 月 1 日\n\n`;
     out+=`> 自動匯出，含 GPS 位置與記帳者資訊。\n\n`;
     out+=`## 💰 預算總覽\n\n`;
     out+=`| 項目 | 金額 |\n|------|------|\n`;
@@ -1073,7 +1073,7 @@ function generateExport() {
     return out;
 
   } else if(exportFormat==='table'){
-    let out=`${'═'.repeat(54)}\n  菲律賓旅費  3/31 – 4/7\n${'═'.repeat(54)}\n\n`;
+    let out=`${'═'.repeat(54)}\n  菲律賓旅費  3/31 – 4/1\n${'═'.repeat(54)}\n\n`;
     TRIP_DATES.forEach((date,i)=>{
       const dayItems=[...expenses,...exchanges].filter(r=>r.date===date);
       if(!dayItems.length) return;
@@ -1319,7 +1319,7 @@ async function callAI(userText){
   const b=calcBalance();
   const recent=records.slice(0,5).map(r=>r.type==='exchange'?`換匯 $${r.usd}→₱${Math.round(r.php)}`:`${r.currency==='USD'?'$'+r.amount.toFixed(2):'₱'+Math.round(r.amount)} ${r.desc}[${r.who}]`).join('，');
   const dn=todayDayNum();
-  const sys=`你是旅遊記帳助手，服務在菲律賓旅遊的台灣人（3/31-4/7，${dn?`今天是Day${dn}`:''}）。繁體中文，親切簡短，不超過80字。\n餘額：USD $${b.usdBalance.toFixed(2)}，PHP ₱${Math.round(b.phpBalance).toLocaleString()}。最近：${recent||'無'}`;
+  const sys=`你是旅遊記帳助手，服務在菲律賓旅遊的台灣人（3/31-4/1，${dn?`今天是Day${dn}`:''}）。繁體中文，親切簡短，不超過80字。\n餘額：USD $${b.usdBalance.toFixed(2)}，PHP ₱${Math.round(b.phpBalance).toLocaleString()}。最近：${recent||'無'}`;
   try{
     const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:sys,messages:[{role:'user',content:userText}]})});
     const d=await res.json();
