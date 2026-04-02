@@ -214,8 +214,25 @@ select option{background:var(--card2)}
 .gps-error .gps-name{color:var(--red)}
 .rate-preview{font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--peso);margin-top:6px;min-height:16px}
 .modal-btns{display:flex;gap:10px;margin-top:16px}
-.cancel-btn{flex:0 0 80px;padding:14px;border:1px solid var(--border);background:var(--card2);color:var(--muted);border-radius:14px;font-family:'Noto Sans TC',sans-serif;font-size:0.9rem;cursor:pointer;transition:all 0.15s}
-.cancel-btn:active{background:rgba(255,82,82,0.1);color:var(--red);border-color:rgba(255,82,82,0.3)}
+.debug-section{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:14px}
+.debug-section h3{font-size:0.7rem;color:var(--muted);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:12px}
+.calc-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:0.82rem}
+.calc-row:last-child{border-bottom:none}
+.calc-row.total{font-weight:700;font-size:0.9rem;padding-top:10px}
+.calc-row .lbl{color:var(--muted)}
+.calc-row .val{font-family:'JetBrains Mono',monospace}
+.calc-row.pos .val{color:var(--green)}
+.calc-row.neg .val{color:var(--red)}
+.calc-row.result .val{color:var(--glow)}
+.raw-table{width:100%;border-collapse:collapse;font-size:0.7rem}
+.raw-table th{text-align:left;padding:5px 8px;color:var(--muted);font-weight:400;border-bottom:1px solid var(--border);font-size:0.65rem;white-space:nowrap}
+.raw-table td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.04);vertical-align:top;font-family:'JetBrains Mono',monospace;font-size:0.68rem;color:var(--text)}
+.raw-table tr.bad{background:rgba(255,82,82,0.07)}
+.raw-table tr.bad td{color:var(--red)}
+.raw-table tr:active{background:var(--card2)}
+.flag-tag{display:inline-block;background:rgba(255,82,82,0.15);color:var(--red);border-radius:4px;padding:1px 5px;font-size:0.6rem;margin-left:4px}
+.debug-del{background:none;border:none;color:var(--red);cursor:pointer;font-size:0.8rem;opacity:0.5;padding:2px 4px}
+.debug-del:active{opacity:1}
 .edit-btn{background:none;border:none;color:var(--glow);font-size:0.85rem;cursor:pointer;padding:6px;opacity:0.6;flex-shrink:0}
 .edit-btn:active{opacity:1}
 .submit-btn{flex:1;padding:14px;border:none;background:linear-gradient(135deg,var(--glow),var(--glow2));color:var(--night);border-radius:14px;font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;cursor:pointer;letter-spacing:0.05em;transition:all 0.15s}
@@ -282,6 +299,7 @@ select option{background:var(--card2)}
   <div class="tab active" onclick="switchTab('chat')"><div class="tab-ico">💬</div>對話</div>
   <div class="tab" onclick="switchTab('ledger')"><div class="tab-ico">📋</div>帳目</div>
   <div class="tab" onclick="switchTab('export')"><div class="tab-ico">📤</div>匯出</div>
+  <div class="tab" onclick="switchTab('debug')"><div class="tab-ico">🔍</div>Debug</div>
 </div>
 
 <div class="screen active" id="screen-chat">
@@ -307,6 +325,10 @@ select option{background:var(--card2)}
 
 <div class="screen" id="screen-export">
   <div class="export-wrap" id="exportWrap"></div>
+</div>
+
+<div class="screen" id="screen-debug">
+  <div class="export-wrap" id="debugWrap"></div>
 </div>
 
 </div><!-- /appRoot -->
@@ -747,9 +769,10 @@ window.switchTab = function(tab) {
   document.querySelectorAll('.screen').forEach(s=>{s.classList.remove('active');s.style.display='none'});
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   const s = document.getElementById('screen-'+tab); s.style.display='flex'; s.classList.add('active');
-  ['chat','ledger','export'].forEach((t,i)=>{ if(t===tab) document.querySelectorAll('.tab')[i].classList.add('active'); });
+  ['chat','ledger','export','debug'].forEach((t,i)=>{ if(t===tab) document.querySelectorAll('.tab')[i].classList.add('active'); });
   if(tab==='ledger') renderLedger();
   if(tab==='export') renderExport();
+  if(tab==='debug') renderDebug();
 };
 
 // ══════════════════════════════════
@@ -1090,6 +1113,97 @@ function generateExport() {
 function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 window.copyExport = function(){ const t=generateExport(); if(navigator.clipboard) navigator.clipboard.writeText(t).then(()=>showToast('✓ 已複製')).catch(()=>fb(t)); else fb(t); function fb(t){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();document.execCommand('copy');document.body.removeChild(a);showToast('✓ 已複製');} };
 window.shareExport = function(){ const t=generateExport(); if(navigator.share) navigator.share({title:'菲律賓旅費記帳',text:t}).catch(()=>{}); else window.copyExport(); };
+
+// ══════════════════════════════════
+// DEBUG
+// ══════════════════════════════════
+function renderDebug() {
+  const b = calcBalance();
+  const exchanges = records.filter(r=>r.type==='exchange');
+  const expenses  = records.filter(r=>r.type==='expense');
+  const usdExp    = expenses.filter(r=>r.currency==='USD');
+  const phpExp    = expenses.filter(r=>r.currency==='PHP');
+
+  // Flag bad records
+  function flags(r) {
+    const f = [];
+    if(!r.date) f.push('無日期');
+    else if(!TRIP_DATES.includes(r.date)) f.push('日期超出旅程');
+    if(r.type==='expense' && (!r.amount || r.amount<=0)) f.push('金額異常');
+    if(r.type==='exchange' && (!r.usd||!r.php||r.usd<=0||r.php<=0)) f.push('換匯金額異常');
+    return f;
+  }
+  const badCount = records.filter(r=>flags(r).length>0).length;
+
+  // ── Section 1: Calculation walkthrough ──
+  let html = `<div class="debug-section">
+    <h3>💰 帳務核算步驟</h3>`;
+
+  html += `<div class="calc-row pos"><span class="lbl">起始美金預算</span><span class="val">$${BUDGET_USD.toFixed(2)}</span></div>`;
+
+  usdExp.forEach(r=>{
+    const flag = flags(r).length ? `<span class="flag-tag">⚠️</span>` : '';
+    html += `<div class="calc-row neg"><span class="lbl">${r.date||'?'} ${r.desc}${flag}</span><span class="val">-$${Number(r.amount).toFixed(2)}</span></div>`;
+  });
+  exchanges.forEach(r=>{
+    const flag = flags(r).length ? `<span class="flag-tag">⚠️</span>` : '';
+    html += `<div class="calc-row neg"><span class="lbl">${r.date||'?'} 換匯@${r.where}${flag}</span><span class="val">-$${Number(r.usd).toFixed(2)}</span></div>`;
+  });
+  html += `<div class="calc-row result"><span class="lbl">USD 剩餘</span><span class="val">$${b.usdBalance.toFixed(2)}</span></div>`;
+
+  html += `<div style="height:12px"></div>`;
+  html += `<div class="calc-row pos"><span class="lbl">PHP 換匯入（${exchanges.length} 次）</span><span class="val">₱${Math.round(b.phpIn).toLocaleString()}</span></div>`;
+  exchanges.forEach(r=>{
+    html += `<div class="calc-row" style="padding-left:12px"><span class="lbl" style="font-size:0.72rem">${r.date||'?'} ${r.where}</span><span class="val" style="color:var(--green)">+₱${Math.round(r.php).toLocaleString()}</span></div>`;
+  });
+  phpExp.forEach(r=>{
+    const flag = flags(r).length ? `<span class="flag-tag">⚠️</span>` : '';
+    html += `<div class="calc-row neg"><span class="lbl">${r.date||'?'} ${r.desc}${flag}</span><span class="val">-₱${Math.round(r.amount).toLocaleString()}</span></div>`;
+  });
+  html += `<div class="calc-row result"><span class="lbl">PHP 剩餘</span><span class="val">₱${Math.round(b.phpBalance).toLocaleString()}</span></div>`;
+  html += `</div>`;
+
+  // ── Section 2: Raw records table ──
+  html += `<div class="debug-section">
+    <h3>🗄 原始資料（${records.length} 筆${badCount>0?`，<span style="color:var(--red)">${badCount} 筆有問題</span>`:'，全部正常'}）</h3>
+    <div style="overflow-x:auto">
+    <table class="raw-table">
+      <tr>
+        <th>日期</th><th>類型</th><th>金額</th><th>品項／地點</th>
+        <th>幣別</th><th>記帳者</th><th>狀態</th><th></th>
+      </tr>`;
+
+  const sorted = [...records].sort((a,b)=>(a.date||'').localeCompare(b.date||'') || (a.ts||0)-(b.ts||0));
+  sorted.forEach(r=>{
+    const f = flags(r);
+    const isBad = f.length > 0;
+    const dn = tripDayOf(r.date);
+    const dayStr = dn ? `D${dn}` : '?';
+    let amtStr='', descStr='';
+    if(r.type==='exchange'){
+      amtStr = `-$${Number(r.usd).toFixed(2)}<br>+₱${Math.round(r.php)}`;
+      descStr = r.where||'';
+    } else {
+      const sym = r.currency==='USD'?'$':'₱';
+      amtStr = `-${sym}${r.currency==='USD'?Number(r.amount).toFixed(2):Math.round(r.amount)}`;
+      descStr = r.desc||'';
+    }
+    const flagHtml = f.map(x=>`<span class="flag-tag">${x}</span>`).join(' ');
+    html += `<tr class="${isBad?'bad':''}">
+      <td>${r.date||'—'}<br><span style="color:var(--muted);font-size:0.6rem">${dayStr}</span></td>
+      <td>${r.type==='exchange'?'💱':'💸'}</td>
+      <td>${amtStr}</td>
+      <td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(descStr)}</td>
+      <td>${r.currency||'—'}</td>
+      <td>${r.who||'—'}</td>
+      <td>${isBad?flagHtml:'✓'}</td>
+      <td><button class="debug-del" onclick="deleteRecord('${r.fbKey}','${r.who||''}')">✕</button></td>
+    </tr>`;
+  });
+  html += `</table></div></div>`;
+
+  document.getElementById('debugWrap').innerHTML = html;
+}
 
 // ══════════════════════════════════
 // CHAT
