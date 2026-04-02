@@ -798,6 +798,7 @@ document.addEventListener('input', e => {
 
 window.submitModal = async function() {
   const chosenDate = document.getElementById('mDate').value || today();
+  const currentEditingKey = editingKey;   // 先存起來，closeModal 會清掉 editingKey
   if(modalType==='exchange'){
     const usd=parseFloat(document.getElementById('exUSD').value);
     const php=parseFloat(document.getElementById('exPHP').value);
@@ -805,8 +806,8 @@ window.submitModal = async function() {
     const note=document.getElementById('exNote').value.trim();
     if(!usd||!php||usd<=0||php<=0){ showToast('請填寫換匯金額'); return; }
     closeModal();
-    if(editingKey) {
-      await updateRecord(editingKey, {usd,php,where,note,rate:(php/usd),date:chosenDate});
+    if(currentEditingKey) {
+      await updateRecord(currentEditingKey, {usd,php,where,note,rate:(php/usd),date:chosenDate});
     } else {
       const gpsMsg = currentGPS?.name ? `📍 ${currentGPS.name}` : '⚠️ 未取得 GPS';
       showToast(`✓ 換匯記錄中… ${gpsMsg}`);
@@ -820,8 +821,8 @@ window.submitModal = async function() {
     const note=document.getElementById('mNote').value.trim();
     if(!amount||amount<=0||!desc){ showToast('請填寫品項與金額'); return; }
     closeModal();
-    if(editingKey) {
-      await updateRecord(editingKey, {amount,currency:selectedCur,desc,cat,pay:selectedPay,mood:selectedMood,note,date:chosenDate});
+    if(currentEditingKey) {
+      await updateRecord(currentEditingKey, {amount,currency:selectedCur,desc,cat,pay:selectedPay,mood:selectedMood,note,date:chosenDate});
     } else {
       const gpsMsg = currentGPS?.name ? `📍 ${currentGPS.name}` : '⚠️ 未取得 GPS';
       showToast(`✓ 記錄中… ${gpsMsg}`);
