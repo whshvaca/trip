@@ -216,6 +216,8 @@ select option{background:var(--card2)}
 .modal-btns{display:flex;gap:10px;margin-top:16px}
 .cancel-btn{flex:0 0 80px;padding:14px;border:1px solid var(--border);background:var(--card2);color:var(--muted);border-radius:14px;font-family:'Noto Sans TC',sans-serif;font-size:0.9rem;cursor:pointer;transition:all 0.15s}
 .cancel-btn:active{background:rgba(255,82,82,0.1);color:var(--red);border-color:rgba(255,82,82,0.3)}
+.edit-btn{background:none;border:none;color:var(--glow);font-size:0.85rem;cursor:pointer;padding:6px;opacity:0.6;flex-shrink:0}
+.edit-btn:active{opacity:1}
 .submit-btn{flex:1;padding:14px;border:none;background:linear-gradient(135deg,var(--glow),var(--glow2));color:var(--night);border-radius:14px;font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;cursor:pointer;letter-spacing:0.05em;transition:all 0.15s}
 .submit-btn:active{transform:scale(0.97)}
 .toast{position:fixed;bottom:calc(var(--safe-bottom) + 72px);left:50%;transform:translateX(-50%) translateY(16px);background:var(--card);color:var(--text);padding:10px 20px;border-radius:100px;font-size:0.78rem;border:1px solid var(--border);opacity:0;transition:all 0.3s;z-index:200;pointer-events:none;white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis}
@@ -314,7 +316,7 @@ select option{background:var(--card2)}
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-title" id="modalTitle">記錄支出</div>
-    <div class="type-toggle">
+    <div class="type-toggle" id="typeToggle">
       <div class="type-btn expense active" id="tExpense" onclick="setModalType('expense')">💸 支出</div>
       <div class="type-btn exchange" id="tExchange" onclick="setModalType('exchange')">💱 換匯</div>
     </div>
@@ -383,7 +385,7 @@ select option{background:var(--card2)}
 <!-- Firebase SDK -->
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getDatabase, ref, push, onValue, remove, get }
+import { getDatabase, ref, push, onValue, remove, get, update }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
 
 // ══════════════════════════════════
@@ -425,6 +427,7 @@ let modalType    = 'expense';
 let selectedCur  = 'USD';
 let selectedMood = '';
 let selectedPay  = 'cash';  // 'cash' | 'card'
+let editingKey   = null;    // fbKey being edited, null = new record
 let currentGPS   = null;
 let knownUsers   = [];   // ordered list of names seen, for colour assignment
 let chatLog      = JSON.parse(localStorage.getItem('trv_chat') || '[]');
@@ -655,6 +658,17 @@ async function addRecord(r) {
   }
 }
 
+async function updateRecord(fbKey, changes) {
+  setSyncUI('syncing','同步中…');
+  try {
+    await update(ref(db, `trip/records/${fbKey}`), {...changes, editedBy: myName, editedAt: Date.now()});
+    showToast('✓ 已更新');
+  } catch(e) {
+    setSyncUI('err','同步失敗');
+    showToast('⚠️ 更新失敗');
+  }
+}
+
 async function deleteRecord(fbKey, who) {
   if(who !== myName){
     if(!confirm(`這筆是「${who}」記的，確定要刪除嗎？`)) return;
@@ -665,6 +679,55 @@ async function deleteRecord(fbKey, who) {
   } catch { showToast('刪除失敗'); }
 }
 window.deleteRecord = deleteRecord;
+
+// open modal pre-filled with existing record for editing
+window.editRecord = function(fbKey) {
+  const r = records.find(x => x.fbKey === fbKey);
+  if(!r) return;
+  editingKey = fbKey;
+
+  setModalType(r.type);
+  document.getElementById('modalTitle').textContent = r.type === 'exchange' ? '✏️ 編輯換匯' : '✏️ 編輯支出';
+
+  if(r.type === 'exchange') {
+    document.getElementById('exUSD').value   = r.usd || '';
+    document.getElementById('exPHP').value   = r.php || '';
+    document.getElementById('exWhere').value = r.where || '';
+    document.getElementById('exNote').value  = r.note || '';
+    const u = r.usd||0, p = r.php||0;
+    document.getElementById('ratePreview').textContent = (u>0&&p>0) ? `匯率：${(p/u).toFixed(2)} PHP / USD` : '匯率：—';
+  } else {
+    setCur(r.currency || 'USD');
+    document.getElementById('mDesc').value   = r.desc || '';
+    document.getElementById('mAmount').value = r.amount || '';
+    // category
+    const catSel = document.getElementById('mCat');
+    for(let i=0;i<catSel.options.length;i++){
+      if(catSel.options[i].text.includes(r.cat||'')) { catSel.selectedIndex=i; break; }
+    }
+    // pay
+    setPay(r.pay || 'cash');
+    // mood
+    selectedMood = r.mood || '';
+    document.querySelectorAll('.mood-btn').forEach(b=>{
+      b.classList.toggle('active', b.textContent.includes(selectedMood) && selectedMood !== '');
+    });
+    document.getElementById('mNote').value = r.note || '';
+  }
+
+  // GPS: keep existing, don't re-trigger
+  currentGPS = r.gps || null;
+  if(currentGPS?.name) {
+    const coord = currentGPS.lat ? `${currentGPS.lat.toFixed(5)}, ${currentGPS.lng.toFixed(5)}` : '';
+    setGPSUI('ok', currentGPS.name, coord ? `📌 ${coord}` : '已有位置資訊', false);
+  } else {
+    setGPSUI('error', '此筆無位置資訊', '儲存時不會更新 GPS', false);
+  }
+
+  // hide type-toggle in edit mode (can't change type)
+  document.getElementById('typeToggle').style.display = 'none';
+  document.getElementById('overlay').classList.add('show');
+};
 
 // ══════════════════════════════════
 // TABS
@@ -682,11 +745,17 @@ window.switchTab = function(tab) {
 // MODAL
 // ══════════════════════════════════
 window.openModal = function(type='expense') {
+  editingKey = null;
+  document.getElementById('typeToggle').style.display = '';
   setModalType(type); currentGPS=null; startGPS();
   document.getElementById('overlay').classList.add('show');
 };
 window.closeOverlay = function(e) { if(e.target===document.getElementById('overlay')) document.getElementById('overlay').classList.remove('show'); };
-window.closeModal = function() { document.getElementById('overlay').classList.remove('show'); };
+window.closeModal = function() {
+  document.getElementById('overlay').classList.remove('show');
+  editingKey = null;
+  document.getElementById('typeToggle').style.display = '';
+};
 function closeModal() { window.closeModal(); }
 
 window.setModalType = function(t) {
@@ -729,9 +798,13 @@ window.submitModal = async function() {
     const note=document.getElementById('exNote').value.trim();
     if(!usd||!php||usd<=0||php<=0){ showToast('請填寫換匯金額'); return; }
     closeModal();
-    const gpsMsg = currentGPS?.name ? `📍 ${currentGPS.name}` : '⚠️ 未取得 GPS';
-    showToast(`✓ 換匯記錄中… ${gpsMsg}`);
-    await addRecord({type:'exchange',usd,php,where,note,date:today(),rate:(php/usd),gps:currentGPS?{...currentGPS}:null});
+    if(editingKey) {
+      await updateRecord(editingKey, {usd,php,where,note,rate:(php/usd)});
+    } else {
+      const gpsMsg = currentGPS?.name ? `📍 ${currentGPS.name}` : '⚠️ 未取得 GPS';
+      showToast(`✓ 換匯記錄中… ${gpsMsg}`);
+      await addRecord({type:'exchange',usd,php,where,note,date:today(),rate:(php/usd),gps:currentGPS?{...currentGPS}:null});
+    }
     resetModal();
   } else {
     const amount=parseFloat(document.getElementById('mAmount').value);
@@ -740,9 +813,13 @@ window.submitModal = async function() {
     const note=document.getElementById('mNote').value.trim();
     if(!amount||amount<=0||!desc){ showToast('請填寫品項與金額'); return; }
     closeModal();
-    const gpsMsg = currentGPS?.name ? `📍 ${currentGPS.name}` : '⚠️ 未取得 GPS';
-    showToast(`✓ 記錄中… ${gpsMsg}`);
-    await addRecord({type:'expense',amount,currency:selectedCur,desc,cat,pay:selectedPay,mood:selectedMood,note,date:today(),gps:currentGPS?{...currentGPS}:null});
+    if(editingKey) {
+      await updateRecord(editingKey, {amount,currency:selectedCur,desc,cat,pay:selectedPay,mood:selectedMood,note});
+    } else {
+      const gpsMsg = currentGPS?.name ? `📍 ${currentGPS.name}` : '⚠️ 未取得 GPS';
+      showToast(`✓ 記錄中… ${gpsMsg}`);
+      await addRecord({type:'expense',amount,currency:selectedCur,desc,cat,pay:selectedPay,mood:selectedMood,note,date:today(),gps:currentGPS?{...currentGPS}:null});
+    }
     resetModal();
   }
   updateHeader();
@@ -819,7 +896,8 @@ function rowHTML(r) {
     ? `<span style="color:var(--peso);background:rgba(78,205,196,0.1);border:1px solid rgba(78,205,196,0.25);border-radius:20px;padding:1px 7px;font-size:0.65rem">💳 刷卡</span>`
     : `<span style="color:var(--muted);font-size:0.65rem">💵 現金</span>`;
   const canDel = r.who === myName;
-  const delBtn = `<button class="del-btn" onclick="deleteRecord('${r.fbKey}','${r.who||''}')" style="opacity:${canDel?'0.4':'0.2'}">✕</button>`;
+  const editBtn = `<button class="edit-btn" onclick="editRecord('${r.fbKey}')" title="編輯">✏️</button>`;
+  const delBtn  = `<button class="del-btn"  onclick="deleteRecord('${r.fbKey}','${r.who||''}')" style="opacity:${canDel?'0.4':'0.2'}">✕</button>`;
 
   if(r.type==='exchange'){
     return `<div class="entry-row exchange">
@@ -834,7 +912,7 @@ function rowHTML(r) {
         <div class="entry-amt" style="color:var(--red)">-$${r.usd.toFixed(2)}</div>
         <div class="entry-cur" style="color:var(--peso)">+₱${Math.round(r.php).toLocaleString()}</div>
       </div>
-      ${delBtn}
+      ${editBtn}${delBtn}
     </div>`;
   }
   const sym=r.currency==='USD'?'$':'₱';
@@ -851,7 +929,7 @@ function rowHTML(r) {
       <div class="entry-amt" style="color:var(--red)">-${sym}${amt}</div>
       <div class="entry-cur">${r.currency}</div>
     </div>
-    ${delBtn}
+    ${editBtn}${delBtn}
   </div>`;
 }
 
