@@ -365,6 +365,8 @@ select option{background:var(--card2)}
       <span class="field-label">備註（選填）</span>
       <input type="text" id="exNote" placeholder="">
     </div>
+    <span class="field-label">消費日期</span>
+    <input type="date" id="mDate" style="color-scheme:dark">
     <div class="gps-status-bar gps-loading" id="gpsBar">
       <div class="gps-icon">📍</div>
       <div class="gps-text" id="gpsTextBox">
@@ -724,6 +726,9 @@ window.editRecord = function(fbKey) {
     setGPSUI('error', '此筆無位置資訊', '儲存時不會更新 GPS', false);
   }
 
+  // fill date
+  document.getElementById('mDate').value = r.date || today();
+
   // hide type-toggle in edit mode (can't change type)
   document.getElementById('typeToggle').style.display = 'none';
   document.getElementById('overlay').classList.add('show');
@@ -747,6 +752,7 @@ window.switchTab = function(tab) {
 window.openModal = function(type='expense') {
   editingKey = null;
   document.getElementById('typeToggle').style.display = '';
+  document.getElementById('mDate').value = today();
   setModalType(type); currentGPS=null; startGPS();
   document.getElementById('overlay').classList.add('show');
 };
@@ -791,6 +797,7 @@ document.addEventListener('input', e => {
 });
 
 window.submitModal = async function() {
+  const chosenDate = document.getElementById('mDate').value || today();
   if(modalType==='exchange'){
     const usd=parseFloat(document.getElementById('exUSD').value);
     const php=parseFloat(document.getElementById('exPHP').value);
@@ -799,12 +806,11 @@ window.submitModal = async function() {
     if(!usd||!php||usd<=0||php<=0){ showToast('請填寫換匯金額'); return; }
     closeModal();
     if(editingKey) {
-      const orig = records.find(x => x.fbKey === editingKey);
-      await updateRecord(editingKey, {usd, php, where, note, rate:(php/usd), date: orig?.date || today()});
+      await updateRecord(editingKey, {usd,php,where,note,rate:(php/usd),date:chosenDate});
     } else {
       const gpsMsg = currentGPS?.name ? `📍 ${currentGPS.name}` : '⚠️ 未取得 GPS';
       showToast(`✓ 換匯記錄中… ${gpsMsg}`);
-      await addRecord({type:'exchange',usd,php,where,note,date:today(),rate:(php/usd),gps:currentGPS?{...currentGPS}:null});
+      await addRecord({type:'exchange',usd,php,where,note,date:chosenDate,rate:(php/usd),gps:currentGPS?{...currentGPS}:null});
     }
     resetModal();
   } else {
@@ -815,12 +821,11 @@ window.submitModal = async function() {
     if(!amount||amount<=0||!desc){ showToast('請填寫品項與金額'); return; }
     closeModal();
     if(editingKey) {
-      const orig = records.find(x => x.fbKey === editingKey);
-      await updateRecord(editingKey, {amount, currency:selectedCur, desc, cat, pay:selectedPay, mood:selectedMood, note, date: orig?.date || today()});
+      await updateRecord(editingKey, {amount,currency:selectedCur,desc,cat,pay:selectedPay,mood:selectedMood,note,date:chosenDate});
     } else {
       const gpsMsg = currentGPS?.name ? `📍 ${currentGPS.name}` : '⚠️ 未取得 GPS';
       showToast(`✓ 記錄中… ${gpsMsg}`);
-      await addRecord({type:'expense',amount,currency:selectedCur,desc,cat,pay:selectedPay,mood:selectedMood,note,date:today(),gps:currentGPS?{...currentGPS}:null});
+      await addRecord({type:'expense',amount,currency:selectedCur,desc,cat,pay:selectedPay,mood:selectedMood,note,date:chosenDate,gps:currentGPS?{...currentGPS}:null});
     }
     resetModal();
   }
@@ -833,6 +838,7 @@ function resetModal(){
   selectedPay='cash';
   document.getElementById('payCC').classList.add('active');
   document.getElementById('payCard').classList.remove('active');
+  document.getElementById('mDate').value = today();
   document.getElementById('ratePreview').textContent='匯率：—';
 }
 
