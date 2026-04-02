@@ -799,7 +799,8 @@ window.submitModal = async function() {
     if(!usd||!php||usd<=0||php<=0){ showToast('請填寫換匯金額'); return; }
     closeModal();
     if(editingKey) {
-      await updateRecord(editingKey, {usd,php,where,note,rate:(php/usd)});
+      const orig = records.find(x => x.fbKey === editingKey);
+      await updateRecord(editingKey, {usd, php, where, note, rate:(php/usd), date: orig?.date || today()});
     } else {
       const gpsMsg = currentGPS?.name ? `📍 ${currentGPS.name}` : '⚠️ 未取得 GPS';
       showToast(`✓ 換匯記錄中… ${gpsMsg}`);
@@ -814,7 +815,8 @@ window.submitModal = async function() {
     if(!amount||amount<=0||!desc){ showToast('請填寫品項與金額'); return; }
     closeModal();
     if(editingKey) {
-      await updateRecord(editingKey, {amount,currency:selectedCur,desc,cat,pay:selectedPay,mood:selectedMood,note});
+      const orig = records.find(x => x.fbKey === editingKey);
+      await updateRecord(editingKey, {amount, currency:selectedCur, desc, cat, pay:selectedPay, mood:selectedMood, note, date: orig?.date || today()});
     } else {
       const gpsMsg = currentGPS?.name ? `📍 ${currentGPS.name}` : '⚠️ 未取得 GPS';
       showToast(`✓ 記錄中… ${gpsMsg}`);
@@ -1122,6 +1124,8 @@ function parseNL(text){
   }
   const amount=amts[0];
   const currency=phpRE.test(text)?'PHP':'USD';
+  // payment method detection
+  const pay=/刷卡|信用卡|credit|card|visa|master|jcb/i.test(text) ? 'card' : 'cash';
   let cat='其他';
   if(/早餐|午餐|晚餐|吃飯|餐廳|咖啡|飲料|便當|小吃|食物|吃|喝|brunch|dinner|lunch/.test(text)) cat='餐飲';
   else if(/計程車|Grab|grab|Uber|uber|公車|客運|船|渡輪|jeep|三輪車|交通|taxi/.test(text)) cat='交通';
@@ -1132,8 +1136,8 @@ function parseNL(text){
   else if(/網路|SIM|sim|電話|data/.test(text)) cat='通訊';
   else if(/機票|飛機|航空|flight/.test(text)) cat='機票';
   else if(/伴手禮|禮物|帶回/.test(text)) cat='伴手禮';
-  const desc=text.replace(/\d[\d,]*\.?\d*/g,'').replace(/披索|piso|php|peso|₱|美金|美元|usd|\$|花了?|付了?|今天|昨天|晚上|下午|早上|元|塊/gi,'').trim().slice(0,20)||cat;
-  return {type:'expense',amount,currency,desc,cat,mood:'',note:'',date:today()};
+  const desc=text.replace(/\d[\d,]*\.?\d*/g,'').replace(/披索|piso|php|peso|₱|美金|美元|usd|\$|花了?|付了?|今天|昨天|晚上|下午|早上|元|塊|刷卡|信用卡|現金/gi,'').trim().slice(0,20)||cat;
+  return {type:'expense',amount,currency,pay,desc,cat,mood:'',note:'',date:today()};
 }
 
 async function processChat(text){
@@ -1164,7 +1168,8 @@ async function processChat(text){
     if(parsed.type==='exchange') return `✓ 換匯已記錄\n💱 ${parsed.where}\n$${parsed.usd} → ₱${Math.round(parsed.php).toLocaleString()}（@${parsed.rate.toFixed(2)}）${loc}`;
     const sym=parsed.currency==='USD'?'$':'₱';
     const amt=parsed.currency==='USD'?parsed.amount.toFixed(2):Math.round(parsed.amount).toLocaleString();
-    return `✓ 記錄完成 ${catEmoji(parsed.cat)}\n${parsed.desc}　-${sym}${amt} ${parsed.currency}${loc}`;
+    const payLabel=parsed.pay==='card'?'💳 刷卡':'💵 現金';
+    return `✓ 記錄完成 ${catEmoji(parsed.cat)}\n${parsed.desc}　-${sym}${amt} ${parsed.currency}　${payLabel}${loc}`;
   }
   return await callAI(text);
 }
