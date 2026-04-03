@@ -246,7 +246,7 @@ select option{background:var(--card2)}
 <!-- ── Nickname Screen ── -->
 <div id="nickScreen">
   <div class="nick-logo">✈ 旅費本</div>
-  <div class="nick-sub">3/31 – 4/1 · 菲律賓</div>
+  <div class="nick-sub">3/31 – 4/7 · 菲律賓</div>
   <div class="nick-label">你是誰？</div>
   <input class="nick-input" id="nickInput" type="text" placeholder="輸入你的名字" maxlength="8">
   <div class="nick-presets" id="nickPresets"></div>
@@ -261,7 +261,7 @@ select option{background:var(--card2)}
   <div class="header-top">
     <div>
       <div class="app-name">✈ 旅費本</div>
-      <div class="app-sub">3/31 – 4/1 · 菲律賓</div>
+      <div class="app-sub">3/31 – 4/7 · 菲律賓</div>
     </div>
     <div class="hdr-right">
       <div class="me-badge" onclick="changeName()" title="點擊改名">
@@ -298,6 +298,7 @@ select option{background:var(--card2)}
 <div class="tabs">
   <div class="tab active" onclick="switchTab('chat')"><div class="tab-ico">💬</div>對話</div>
   <div class="tab" onclick="switchTab('ledger')"><div class="tab-ico">📋</div>帳目</div>
+  <div class="tab" onclick="switchTab('other')"><div class="tab-ico">🗂</div>其他</div>
   <div class="tab" onclick="switchTab('export')"><div class="tab-ico">📤</div>匯出</div>
   <div class="tab" onclick="switchTab('debug')"><div class="tab-ico">🔍</div>Debug</div>
 </div>
@@ -321,6 +322,10 @@ select option{background:var(--card2)}
 <div class="screen" id="screen-ledger">
   <div class="ledger-top"><div class="filter-row" id="filterRow"></div></div>
   <div class="entries-list" id="entriesList"></div>
+</div>
+
+<div class="screen" id="screen-other">
+  <div class="export-wrap" id="otherWrap"></div>
 </div>
 
 <div class="screen" id="screen-export">
@@ -428,14 +433,15 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db  = getDatabase(app);
 const RECORDS_REF = ref(db, 'trip/records');
+const OTHER_REF   = ref(db, 'trip/other');
 
 // ══════════════════════════════════
 // CONSTANTS
 // ══════════════════════════════════
 const BUDGET_USD = 1997;
 const TRIP_START = '2026-03-31';
-const TRIP_DAYS  = 2;
-const TRIP_DATES = ['2026-03-31','2026-04-01'];
+const TRIP_DAYS  = 8;
+const TRIP_DATES = ['2026-03-31','2026-04-01','2026-04-02','2026-04-03','2026-04-04','2026-04-05','2026-04-06','2026-04-07'];
 
 // colours per user (cycles if >6 people)
 const USER_COLORS = ['#f7a541','#4ecdc4','#ff6b9d','#a8e6cf','#c3a6ff','#ffb347'];
@@ -444,6 +450,7 @@ const USER_COLORS = ['#f7a541','#4ecdc4','#ff6b9d','#a8e6cf','#c3a6ff','#ffb347'
 // STATE
 // ══════════════════════════════════
 let records      = [];   // from Firebase
+let otherRecords = [];   // non-local expenses
 let myName       = '';
 let activeFilter = 'all';
 let exportFormat = 'blog';
@@ -527,13 +534,26 @@ function startApp() {
     updateHeader();
     if(document.getElementById('screen-ledger').classList.contains('active')) renderLedger();
     if(document.getElementById('screen-export').classList.contains('active')) renderExport();
+    if(document.getElementById('screen-debug').classList.contains('active')) renderDebug();
     setSyncUI('ok', `${records.length} 筆記錄`);
   }, err => {
     setSyncUI('err','同步失敗');
   });
 
+  // Other expenses listener
+  onValue(OTHER_REF, snap => {
+    otherRecords = [];
+    if(snap.exists()){
+      Object.entries(snap.val()).forEach(([fbKey, r]) => {
+        otherRecords.push({...r, fbKey});
+      });
+    }
+    otherRecords.sort((a,b) => (a.date||'').localeCompare(b.date||'') || (a.ts||0)-(b.ts||0));
+    if(document.getElementById('screen-other').classList.contains('active')) renderOther();
+  });
+
   // init chat
-  if(!chatLog.length) appendMsg('ai', `嗨 ${myName}！旅費本已啟動 ✈️\n\n菲律賓 · 3/31–4/1 · 2天\n起始預算：USD $1,997\n\n直接說：\n• 「午餐 350 披索」\n• 「Grab 2.5 美金」\n• 「150 美金換 8500 披索，在機場」\n• 「查餘額」\n\n每筆都自動抓 GPS 📍，也會記錄是你記的 👤`, false);
+  if(!chatLog.length) appendMsg('ai', `嗨 ${myName}！旅費本已啟動 ✈️\n\n菲律賓 · 3/31–4/7 · 8天\n起始預算：USD $1,997\n\n直接說：\n• 「午餐 350 披索」\n• 「Grab 2.5 美金」\n• 「150 美金換 8500 披索，在機場」\n• 「查餘額」\n\n每筆都自動抓 GPS 📍，也會記錄是你記的 👤`, false);
   else chatLog.forEach(m => appendMsg(m.role, m.text, false));
   scrollChat();
   updateHeader();
@@ -769,10 +789,11 @@ window.switchTab = function(tab) {
   document.querySelectorAll('.screen').forEach(s=>{s.classList.remove('active');s.style.display='none'});
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   const s = document.getElementById('screen-'+tab); s.style.display='flex'; s.classList.add('active');
-  ['chat','ledger','export','debug'].forEach((t,i)=>{ if(t===tab) document.querySelectorAll('.tab')[i].classList.add('active'); });
+  ['chat','ledger','other','export','debug'].forEach((t,i)=>{ if(t===tab) document.querySelectorAll('.tab')[i].classList.add('active'); });
   if(tab==='ledger') renderLedger();
+  if(tab==='other')  renderOther();
   if(tab==='export') renderExport();
-  if(tab==='debug') renderDebug();
+  if(tab==='debug')  renderDebug();
 };
 
 // ══════════════════════════════════
@@ -1010,7 +1031,7 @@ function generateExport() {
   const phpTotal=expenses.filter(r=>r.currency==='PHP').reduce((s,r)=>s+r.amount,0);
 
   if(exportFormat==='blog'){
-    let out=`# 菲律賓旅遊記帳｜2026 年 3 月 31 日 – 4 月 1 日\n\n`;
+    let out=`# 菲律賓旅遊記帳｜2026 年 3 月 31 日 – 4 月 7 日\n\n`;
     out+=`> 自動匯出，含 GPS 位置與記帳者資訊。\n\n`;
     out+=`## 💰 預算總覽\n\n`;
     out+=`| 項目 | 金額 |\n|------|------|\n`;
@@ -1070,10 +1091,34 @@ function generateExport() {
       if(dayPHP>0) out+=`₱${Math.round(dayPHP).toLocaleString()} PHP`;
       out+=`*\n\n---\n\n`;
     }
+
+    // Other expenses
+    if(otherRecords.length) {
+      out+=`## 🗂 其他費用（非當地消費）\n\n`;
+      const before=otherRecords.filter(r=>r.date<TRIP_START);
+      const during=otherRecords.filter(r=>r.date>=TRIP_START&&r.date<=TRIP_DATES[TRIP_DATES.length-1]);
+      const after =otherRecords.filter(r=>r.date>TRIP_DATES[TRIP_DATES.length-1]);
+      function otherGroup(title,items){
+        if(!items.length) return;
+        out+=`### ${title}\n\n`;
+        items.forEach(r=>{
+          const sym=r.currency==='USD'?'$':r.currency==='PHP'?'₱':'NT$';
+          const amt=r.currency==='USD'?Number(r.amount).toFixed(2):Math.round(r.amount).toLocaleString();
+          out+=`- **${r.desc}**　${sym}${amt} ${r.currency}　${r.date}`;
+          if(r.note) out+=`\n  > ${r.note}`;
+          out+='\n';
+        });
+        out+='\n';
+      }
+      otherGroup('出發前', before);
+      otherGroup('旅途中', during);
+      otherGroup('回國後', after);
+    }
+
     return out;
 
   } else if(exportFormat==='table'){
-    let out=`${'═'.repeat(54)}\n  菲律賓旅費  3/31 – 4/1\n${'═'.repeat(54)}\n\n`;
+    let out=`${'═'.repeat(54)}\n  菲律賓旅費  3/31 – 4/7\n${'═'.repeat(54)}\n\n`;
     TRIP_DATES.forEach((date,i)=>{
       const dayItems=[...expenses,...exchanges].filter(r=>r.date===date);
       if(!dayItems.length) return;
@@ -1106,6 +1151,12 @@ function generateExport() {
         out+=`${r.date},Day${dn},支出,${r.currency},-${r.amount},"${r.desc}","${r.cat}","${r.pay==='card'?'刷卡':'現金'}","${r.mood||''}","${r.note||''}","${r.who||''}",${r.gps?.lat||''},${r.gps?.lng||''},"${r.gps?.name||''}"\n`;
       }
     });
+    if(otherRecords.length){
+      out+='\n日期,,類型,幣別,金額,品項,類別,,,備註,記帳者\n';
+      otherRecords.forEach(r=>{
+        out+=`${r.date},,其他,${r.currency},-${r.amount},"${r.desc}","${r.cat||''}",,,,"${r.note||''}","${r.who||''}"\n`;
+      });
+    }
     return out;
   }
 }
@@ -1220,8 +1271,178 @@ function renderDebug() {
 }
 
 // ══════════════════════════════════
-// CHAT
+// OTHER EXPENSES
 // ══════════════════════════════════
+const OTHER_CATS = ['✈ 機票','🏨 訂房','🚌 接送','🛡 保險','💉 疫苗／醫療','📦 行前採購','🎁 伴手禮（台灣買）','💳 訂金／預付','🔮 其他'];
+
+async function addOtherRecord(r) {
+  try { await push(OTHER_REF, {...r, who: myName, ts: Date.now()}); }
+  catch { showToast('⚠️ 儲存失敗'); }
+}
+
+async function updateOtherRecord(fbKey, changes) {
+  try { await update(ref(db, `trip/other/${fbKey}`), {...changes, editedBy: myName, editedAt: Date.now()}); showToast('✓ 已更新'); }
+  catch { showToast('⚠️ 更新失敗'); }
+}
+
+window.deleteOtherRecord = async function(fbKey) {
+  if(!confirm('確定刪除這筆嗎？')) return;
+  try { await remove(ref(db, `trip/other/${fbKey}`)); showToast('已刪除'); }
+  catch { showToast('刪除失敗'); }
+};
+
+// inline add form state
+let editingOtherKey = null;
+
+function renderOther() {
+  const wrap = document.getElementById('otherWrap');
+
+  // Build add/edit form HTML
+  function formHTML(r) {
+    const isEdit = !!r;
+    const catOptions = OTHER_CATS.map(c =>
+      `<option ${(r?.cat||'').includes(c.replace(/.*\s/,''))?'selected':''}>${c}</option>`
+    ).join('');
+    return `
+    <div class="debug-section" id="otherFormBox">
+      <h3>${isEdit ? '✏️ 編輯項目' : '＋ 新增其他費用'}</h3>
+      <span class="field-label">日期</span>
+      <input type="date" id="oDate" value="${r?.date||today()}" style="color-scheme:dark;margin-bottom:8px">
+      <span class="field-label">幣別</span>
+      <div class="cur-toggle" style="margin-bottom:8px">
+        <div class="cur-btn usd ${(r?.currency||'TWD')==='USD'?'active':''}" id="oCurUSD" onclick="setOtherCur('USD')">🇺🇸 USD</div>
+        <div class="cur-btn" id="oCurTWD" onclick="setOtherCur('TWD')" style="${(r?.currency||'TWD')==='TWD'?'background:rgba(86,207,137,0.15);color:var(--green);border-color:rgba(86,207,137,0.4)':''}">🇹🇼 台幣</div>
+        <div class="cur-btn peso ${(r?.currency||'TWD')==='PHP'?'active':''}" id="oCurPHP" onclick="setOtherCur('PHP')">🇵🇭 PHP</div>
+      </div>
+      <span class="field-label">金額</span>
+      <input type="number" id="oAmount" value="${r?.amount||''}" placeholder="0" inputmode="decimal" style="margin-bottom:8px">
+      <span class="field-label">項目</span>
+      <input type="text" id="oDesc" value="${r?.desc||''}" placeholder="例：來回機票、機場接送…" style="margin-bottom:8px">
+      <span class="field-label">類別</span>
+      <select id="oCat" style="margin-bottom:8px">${catOptions}</select>
+      <span class="field-label">備註（選填）</span>
+      <input type="text" id="oNote" value="${r?.note||''}" placeholder="額外說明…" style="margin-bottom:12px">
+      <div class="modal-btns">
+        <button class="cancel-btn" onclick="cancelOtherForm()">取消</button>
+        <button class="submit-btn" onclick="submitOtherForm('${r?.fbKey||''}')">${isEdit?'儲存':'記下來 ✓'}</button>
+      </div>
+    </div>`;
+  }
+
+  let html = '';
+
+  // Show form if adding/editing
+  if(editingOtherKey === '__new__' || (editingOtherKey && editingOtherKey !== '__new__')) {
+    const r = editingOtherKey === '__new__' ? null : otherRecords.find(x=>x.fbKey===editingOtherKey);
+    html += formHTML(r);
+  } else {
+    // Add button
+    html += `<div style="padding:0 0 14px">
+      <button class="submit-btn" style="width:100%" onclick="openOtherForm()">＋ 新增其他費用</button>
+    </div>`;
+  }
+
+  // Records list
+  if(otherRecords.length === 0 && editingOtherKey !== '__new__') {
+    html += `<div class="debug-section"><div style="text-align:center;color:var(--muted);padding:20px;font-size:0.85rem">還沒有其他費用記錄<br><span style="font-size:0.75rem">點上方按鈕新增</span></div></div>`;
+  } else if(otherRecords.length > 0) {
+    // Group by timing: before/during/after trip
+    const before = otherRecords.filter(r=>r.date < TRIP_START);
+    const during = otherRecords.filter(r=>r.date >= TRIP_START && r.date <= TRIP_DATES[TRIP_DATES.length-1]);
+    const after  = otherRecords.filter(r=>r.date > TRIP_DATES[TRIP_DATES.length-1]);
+
+    function otherCard(r) {
+      const sym = r.currency==='USD'?'$':r.currency==='PHP'?'₱':'NT$';
+      const amt = r.currency==='USD'?Number(r.amount||0).toFixed(2):Math.round(r.amount||0).toLocaleString();
+      return `<div style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:0.875rem;font-weight:500">${r.desc||'（無描述）'}</div>
+            <div style="font-size:0.78rem;color:var(--red);font-family:'JetBrains Mono',monospace;margin:3px 0">-${sym}${amt} <span style="color:var(--muted);font-family:'Noto Sans TC',sans-serif;font-size:0.68rem">${r.currency}</span></div>
+            <div style="font-size:0.68rem;color:var(--muted)">📅 ${r.date||'—'}　${r.cat||''}　👤 ${r.who||'?'}</div>
+            ${r.note?`<div style="font-size:0.7rem;color:var(--muted);margin-top:2px">備註：${r.note}</div>`:''}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0">
+            <button class="edit-btn" onclick="openOtherForm('${r.fbKey}')" style="background:rgba(247,165,65,0.1);border:1px solid rgba(247,165,65,0.3);border-radius:8px;padding:5px 8px;font-size:0.72rem;color:var(--glow)">✏️</button>
+            <button class="debug-del" onclick="deleteOtherRecord('${r.fbKey}')" style="background:rgba(255,82,82,0.08);border:1px solid rgba(255,82,82,0.2);border-radius:8px;padding:5px 8px;font-size:0.72rem;color:var(--red);opacity:1">✕</button>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    function groupSection(title, items) {
+      if(!items.length) return '';
+      const total = {};
+      items.forEach(r=>{
+        const c = r.currency||'TWD';
+        total[c] = (total[c]||0) + Number(r.amount||0);
+      });
+      const totalStr = Object.entries(total).map(([c,v])=>{
+        const sym = c==='USD'?'$':c==='PHP'?'₱':'NT$';
+        return `${sym}${c==='USD'?v.toFixed(2):Math.round(v).toLocaleString()}`;
+      }).join(' + ');
+      return `<div class="debug-section">
+        <h3>${title}（${items.length} 筆・${totalStr}）</h3>
+        ${items.map(otherCard).join('')}
+      </div>`;
+    }
+
+    html += groupSection('🛫 出發前', before);
+    html += groupSection('🏖 旅途中', during);
+    html += groupSection('🛬 回國後', after);
+  }
+
+  wrap.innerHTML = html;
+  // restore currency button state
+  if(editingOtherKey) {
+    const r = editingOtherKey === '__new__' ? null : otherRecords.find(x=>x.fbKey===editingOtherKey);
+    setOtherCur(r?.currency || 'TWD');
+  }
+}
+
+let selectedOtherCur = 'TWD';
+window.setOtherCur = function(c) {
+  selectedOtherCur = c;
+  const btns = { USD:'oCurUSD', TWD:'oCurTWD', PHP:'oCurPHP' };
+  Object.entries(btns).forEach(([cur, id]) => {
+    const el = document.getElementById(id); if(!el) return;
+    el.classList.remove('active');
+    el.style.background=''; el.style.color=''; el.style.borderColor='';
+    if(cur===c) {
+      if(c==='USD'){ el.classList.add('active'); }
+      else if(c==='TWD'){ el.style.background='rgba(86,207,137,0.15)'; el.style.color='var(--green)'; el.style.borderColor='rgba(86,207,137,0.4)'; }
+      else if(c==='PHP'){ el.classList.add('active'); }
+    }
+  });
+};
+
+window.openOtherForm = function(fbKey) {
+  editingOtherKey = fbKey || '__new__';
+  renderOther();
+};
+
+window.cancelOtherForm = function() {
+  editingOtherKey = null;
+  renderOther();
+};
+
+window.submitOtherForm = async function(fbKey) {
+  const date   = document.getElementById('oDate').value || today();
+  const amount = parseFloat(document.getElementById('oAmount').value);
+  const desc   = document.getElementById('oDesc').value.trim();
+  const cat    = document.getElementById('oCat').value.replace(/[\u{1F000}-\u{1FFFF}]/gu,'').trim();
+  const note   = document.getElementById('oNote').value.trim();
+  if(!amount||amount<=0||!desc){ showToast('請填寫項目與金額'); return; }
+  const data = { date, amount, currency: selectedOtherCur, desc, cat, note };
+  if(fbKey) {
+    await updateOtherRecord(fbKey, data);
+  } else {
+    await addOtherRecord(data);
+    showToast('✓ 已記錄');
+  }
+  editingOtherKey = null;
+  renderOther();
+};
 function saveChat(){ if(chatLog.length>80) chatLog=chatLog.slice(-80); localStorage.setItem('trv_chat',JSON.stringify(chatLog)); }
 
 function appendMsg(role,text,doSave=true){
@@ -1319,7 +1540,7 @@ async function callAI(userText){
   const b=calcBalance();
   const recent=records.slice(0,5).map(r=>r.type==='exchange'?`換匯 $${r.usd}→₱${Math.round(r.php)}`:`${r.currency==='USD'?'$'+r.amount.toFixed(2):'₱'+Math.round(r.amount)} ${r.desc}[${r.who}]`).join('，');
   const dn=todayDayNum();
-  const sys=`你是旅遊記帳助手，服務在菲律賓旅遊的台灣人（3/31-4/1，${dn?`今天是Day${dn}`:''}）。繁體中文，親切簡短，不超過80字。\n餘額：USD $${b.usdBalance.toFixed(2)}，PHP ₱${Math.round(b.phpBalance).toLocaleString()}。最近：${recent||'無'}`;
+  const sys=`你是旅遊記帳助手，服務在菲律賓旅遊的台灣人（3/31-4/7，${dn?`今天是Day${dn}`:''}）。繁體中文，親切簡短，不超過80字。\n餘額：USD $${b.usdBalance.toFixed(2)}，PHP ₱${Math.round(b.phpBalance).toLocaleString()}。最近：${recent||'無'}`;
   try{
     const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:sys,messages:[{role:'user',content:userText}]})});
     const d=await res.json();
