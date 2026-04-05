@@ -662,17 +662,22 @@ async function getGPSSilent() {
 // BALANCE
 // ══════════════════════════════════
 function calcBalance() {
-  let usdSpent=0, phpIn=0, phpSpent=0;
-  records.filter(r=>r.type==='exchange').forEach(r=>{ usdSpent+=r.usd; phpIn+=r.php; });
-  records.filter(r=>r.type==='expense').forEach(r=>{
-    if(r.currency==='USD') usdSpent+=r.amount; else phpSpent+=r.amount;
+  let usdSpent=0, phpIn=0, phpCashSpent=0, phpCardSpent=0;
+  // USD: only used for exchange or direct USD cash payment
+  records.filter(r=>r.type==='exchange').forEach(r=>{ usdSpent+=Number(r.usd||0); phpIn+=Number(r.php||0); });
+  records.filter(r=>r.type==='expense'&&r.currency==='USD').forEach(r=>{ usdSpent+=Number(r.amount||0); });
+  // PHP: split cash vs card
+  records.filter(r=>r.type==='expense'&&r.currency==='PHP').forEach(r=>{
+    if(r.pay==='card') phpCardSpent+=Number(r.amount||0);
+    else               phpCashSpent+=Number(r.amount||0);
   });
   return {
-    usdBalance: BUDGET_USD - usdSpent,
+    usdBalance:   BUDGET_USD - usdSpent,
     usdSpent,
-    phpIn,        // 總共換進多少披索
-    phpSpent,     // 已花多少披索
-    phpBalance: phpIn - phpSpent
+    phpIn,
+    phpCashSpent,
+    phpCardSpent,                        // 刷卡不扣現金餘額
+    phpBalance:   phpIn - phpCashSpent,  // 只扣現金消費
   };
 }
 
@@ -687,8 +692,11 @@ function updateHeader() {
   document.getElementById('usdBalance').textContent = fmt(b.usdBalance);
   document.getElementById('usdSpent').textContent = '已花 '+fmt(b.usdSpent);
   document.getElementById('pesoBalance').textContent = '₱'+Math.round(b.phpBalance).toLocaleString();
+  const pesoSub = b.phpCardSpent>0
+    ? `現金已花 ₱${Math.round(b.phpCashSpent).toLocaleString()}　刷卡 ₱${Math.round(b.phpCardSpent).toLocaleString()}`
+    : `現金已花 ₱${Math.round(b.phpCashSpent).toLocaleString()}`;
   const exc = records.filter(r=>r.type==='exchange');
-  document.getElementById('pesoInfo').textContent = exc.length ? `換匯 ${exc.length} 次` : '尚未換匯';
+  document.getElementById('pesoInfo').textContent = exc.length ? pesoSub : '尚未換匯';
   const pct = Math.max(0,Math.min(100,(b.usdBalance/BUDGET_USD)*100));
   const bar = document.getElementById('usdBar');
   bar.style.width = pct+'%';
@@ -1243,13 +1251,17 @@ function renderDebug() {
   // ── 帳務核算 ──
   html += `<div class="debug-section"><h3>💰 帳務核算</h3>`;
   html += `<div class="calc-row pos"><span class="lbl">起始美金</span><span class="val">$${BUDGET_USD.toFixed(2)}</span></div>`;
-  html += `<div class="calc-row neg"><span class="lbl">USD 支出合計（${usdExp.length} 筆）</span><span class="val">-$${usdExp.reduce((s,r)=>s+Number(r.amount||0),0).toFixed(2)}</span></div>`;
-  html += `<div class="calc-row neg"><span class="lbl">換匯扣美金合計（${exchanges.length} 次）</span><span class="val">-$${exchanges.reduce((s,r)=>s+Number(r.usd||0),0).toFixed(2)}</span></div>`;
+  html += `<div class="calc-row neg"><span class="lbl">USD 直接支出（${usdExp.length} 筆）</span><span class="val">-$${usdExp.reduce((s,r)=>s+Number(r.amount||0),0).toFixed(2)}</span></div>`;
+  html += `<div class="calc-row neg"><span class="lbl">換匯扣美金（${exchanges.length} 次）</span><span class="val">-$${exchanges.reduce((s,r)=>s+Number(r.usd||0),0).toFixed(2)}</span></div>`;
   html += `<div class="calc-row result"><span class="lbl">USD 剩餘</span><span class="val">$${b.usdBalance.toFixed(2)}</span></div>`;
   html += `<div style="height:10px"></div>`;
   html += `<div class="calc-row pos"><span class="lbl">換匯入 PHP（${exchanges.length} 次）</span><span class="val">+₱${Math.round(b.phpIn).toLocaleString()}</span></div>`;
-  html += `<div class="calc-row neg"><span class="lbl">PHP 支出合計（${phpExp.length} 筆）</span><span class="val">-₱${Math.round(phpExp.reduce((s,r)=>s+Number(r.amount||0),0)).toLocaleString()}</span></div>`;
-  html += `<div class="calc-row result"><span class="lbl">PHP 剩餘</span><span class="val">₱${Math.round(b.phpBalance).toLocaleString()}</span></div>`;
+  const phpCash = phpExp.filter(r=>r.pay!=='card');
+  const phpCard = phpExp.filter(r=>r.pay==='card');
+  html += `<div class="calc-row neg"><span class="lbl">PHP 現金支出（${phpCash.length} 筆）</span><span class="val">-₱${Math.round(phpCash.reduce((s,r)=>s+Number(r.amount||0),0)).toLocaleString()}</span></div>`;
+  if(phpCard.length>0)
+    html += `<div class="calc-row" style="color:var(--peso)"><span class="lbl">PHP 刷卡（不扣現金，${phpCard.length} 筆）</span><span class="val">₱${Math.round(phpCard.reduce((s,r)=>s+Number(r.amount||0),0)).toLocaleString()}</span></div>`;
+  html += `<div class="calc-row result"><span class="lbl">PHP 現金剩餘</span><span class="val">₱${Math.round(b.phpBalance).toLocaleString()}</span></div>`;
   html += `</div>`;
 
   // ── 有問題的筆 ──
@@ -1507,7 +1519,20 @@ async function processChat(text){
   if(/餘額|剩多少|還有多少|查餘額|budget/.test(text)){
     const dn=todayDayNum();
     const excCount=records.filter(r=>r.type==='exchange').length;
-    return `💰 目前餘額\n\n🇺🇸 美金\n起始：$${BUDGET_USD}\n已花：$${b.usdSpent.toFixed(2)}\n剩餘：$${b.usdBalance.toFixed(2)}\n\n🇵🇭 披索\n換匯入：₱${Math.round(b.phpIn).toLocaleString()}（共 ${excCount} 次）\n已花：₱${Math.round(b.phpSpent).toLocaleString()}\n剩餘：₱${Math.round(b.phpBalance).toLocaleString()}\n\n${dn?`現在是 Day ${dn}，還有 ${TRIP_DAYS-dn} 天`:''}`;
+    const excUSD=records.filter(r=>r.type==='exchange').reduce((s,r)=>s+Number(r.usd||0),0);
+    let msg = `💰 目前餘額\n\n`;
+    msg += `🇺🇸 美金\n`;
+    msg += `起始：$${BUDGET_USD}\n`;
+    msg += `支出：$${(b.usdSpent - excUSD).toFixed(2)}\n`;
+    msg += `換匯：$${excUSD.toFixed(2)}\n`;
+    msg += `剩餘：$${b.usdBalance.toFixed(2)}\n`;
+    msg += `\n🇵🇭 披索\n`;
+    msg += `換匯入：₱${Math.round(b.phpIn).toLocaleString()}（共 ${excCount} 次）\n`;
+    msg += `現金支出：₱${Math.round(b.phpCashSpent).toLocaleString()}\n`;
+    msg += `剩餘現金：₱${Math.round(b.phpBalance).toLocaleString()}\n`;
+    if(b.phpCardSpent>0) msg += `\n💳 PHP 刷卡（另計，不扣現金）：₱${Math.round(b.phpCardSpent).toLocaleString()}\n`;
+    if(dn) msg += `\n現在是 Day ${dn}，還有 ${TRIP_DAYS-dn} 天`;
+    return msg;
   }
   if(/今天|今日/.test(text)&&/花了|多少|支出/.test(text)){
     const td=records.filter(r=>r.type==='expense'&&r.date===today());
@@ -1517,8 +1542,12 @@ async function processChat(text){
     return `📊 今日（${fmtDate(today())}）\n${td.length} 筆支出\n\n🇺🇸 $${u.toFixed(2)} USD\n🇵🇭 ₱${Math.round(p).toLocaleString()} PHP\n\n${td.map(r=>`• [${r.who}] ${r.desc} ${r.currency==='USD'?'$'+r.amount.toFixed(2):'₱'+Math.round(r.amount)}`).join('\n')}`;
   }
   if(/總共|總計|全部|這趟|整趟/.test(text)){
-    const u=records.filter(r=>r.type==='expense'&&r.currency==='USD').reduce((s,r)=>s+r.amount,0);
-    return `🧾 旅程總計（${records.filter(r=>r.type==='expense').length} 筆支出）\n\n🇺🇸 美金\n起始：$${BUDGET_USD}\n支出：$${u.toFixed(2)}\n剩餘：$${b.usdBalance.toFixed(2)}\n\n🇵🇭 披索\n換匯入：₱${Math.round(b.phpIn).toLocaleString()}\n支出：₱${Math.round(b.phpSpent).toLocaleString()}\n剩餘：₱${Math.round(b.phpBalance).toLocaleString()}`;
+    const excUSD=records.filter(r=>r.type==='exchange').reduce((s,r)=>s+Number(r.usd||0),0);
+    let msg = `🧾 旅程總計\n\n`;
+    msg += `🇺🇸 美金\n起始：$${BUDGET_USD}\n支出：$${(b.usdSpent-excUSD).toFixed(2)}\n換匯：$${excUSD.toFixed(2)}\n剩餘：$${b.usdBalance.toFixed(2)}\n`;
+    msg += `\n🇵🇭 披索\n換匯入：₱${Math.round(b.phpIn).toLocaleString()}\n現金支出：₱${Math.round(b.phpCashSpent).toLocaleString()}\n剩餘：₱${Math.round(b.phpBalance).toLocaleString()}\n`;
+    if(b.phpCardSpent>0) msg += `💳 刷卡另計：₱${Math.round(b.phpCardSpent).toLocaleString()}\n`;
+    return msg;
   }
   const parsed=parseNL(text);
   if(parsed){
